@@ -1,0 +1,23 @@
+/* Global Emo Theme: Dark, moody colors */
+body {
+  margin: 0;
+  font-family: 'Arial', sans-serif;
+  background-color: #1a1a1a; /* Deep black */
+  color: #e0e0e0; /* Light gray text */
+}
+
+.app {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.main {
+  padding: 20px 0;
+}
+
+.posts {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
