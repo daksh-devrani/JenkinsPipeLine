@@ -8,9 +8,9 @@ pipeline {
             }
         }
 
-        stage("Hello@") {
+        stage("trivy") {
             steps {
-                echo "hello World!"
+                trivy image demo_app
             }
         }
     }
