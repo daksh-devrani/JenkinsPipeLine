@@ -2,16 +2,17 @@ pipeline {
     agent any
 
     stages {
-        stage("Hello") {
+        stage("Build Docker Image") {
             steps {
-                echo "hello World!"
+                sh 'docker build -t demo_app_try .'
             }
         }
 
-        stage("trivy") {
+        stage("Trivy Scan") {
             steps {
-                sh "trivy image demo_app"
+                sh 'trivy image --exit-code 1 --severity HIGH,CRITICAL demo_app'
             }
         }
+
     }
 }
