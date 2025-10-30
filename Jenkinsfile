@@ -10,7 +10,7 @@ pipeline {
 
         stage("trivy") {
             steps {
-                trivy image demo_app
+                sh "trivy image demo_app"
             }
         }
     }
