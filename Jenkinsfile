@@ -20,6 +20,43 @@ pipeline {
             }
         }
 
+        stage("Create Network") {
+            steps {
+                sh 'docker network inspect network1 >/dev/null 2>&1 || docker network create network1'
+            }
+        }
 
+        stage("Run App Container") {
+            steps {
+                sh '''
+                    docker run -d --rm \
+                        --network network1 \
+                        --name demo_app_running \
+                        -p 8080:8080 \
+                        demo_app_try:latest
+                '''
+                sh 'sleep 8'
+            }
+        }
+
+        stage("OWASP ZAP Scan") {
+            steps {
+                sh """
+                docker run --rm \
+                    --network network1 \
+                    -v \$(pwd):/zap/wrk/ \
+                    owasp/zap2docker-stable zap-baseline.py \
+                        -t http://demo_app_running:8080 \
+                        -r zap_report.html
+                """
+            }
+        }
+
+    }
+    post {
+        always {
+            sh 'docker stop demo_app_running || true'
+            sh 'docker network rm network1 || true'
+        }
     }
 }
