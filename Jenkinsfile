@@ -50,7 +50,7 @@ pipeline {
                 docker run --rm \
                     --network network1 \
                     -v \$(pwd):/zap/wrk/ \
-                    owasp/zap2docker-stable zap-baseline.py \
+                    ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
                         -t http://demo_app_running:8080 \
                         -r zap_report.html
                 """
