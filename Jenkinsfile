@@ -51,7 +51,7 @@ pipeline {
                     --network network1 \
                     -v \$(pwd):/zap/wrk/ \
                     ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-                        -t http://demo_app_running:8080 \
+                        -t http://demo_app_running:80 \
                         -r zap_report.html
                 """
             }
