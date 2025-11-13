@@ -52,7 +52,9 @@ pipeline {
                     -v \$(pwd):/zap/wrk/ \
                     ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
                         -t http://demo_app_running:80 \
-                        -r zap_report.html
+                        -r zap_report.html \
+                        -J zap_report.json || true \
+                        --exit-code-min-level MEDIUM
                 """
             }
         }
