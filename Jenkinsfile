@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-    PATH = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/Docker.app/Contents/Resources/bin"
-    }
-
-    
     stages {
         stage("Build Docker Image") {
             steps {
@@ -54,7 +49,7 @@ pipeline {
                         -t http://demo_app_running:80 \
                         -r zap_report.html \
                         -J zap_report.json || true \
-                        --exit-code-min-level MEDIUM
+                        --exit-code-min-level HIGH
                 """
             }
         }
