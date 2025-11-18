@@ -96,6 +96,7 @@ pipeline {
                 runCmd 'docker network rm network1 || true'
             }
 
+            // install "publishHTML"
             publishHTML([
                 reportDir: 'reports',
                 reportFiles: 'trivy_repor   t.html,zap_report.html',
