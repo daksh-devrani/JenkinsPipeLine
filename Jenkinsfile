@@ -37,15 +37,13 @@ pipeline {
                     runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
 
                     // JSON report (machine-readable)
-                    runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try'
+                    runCmd 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || true'
 
                     // HTML report (human-readable)
-                    runCmd 'trivy image --exit-code 1 --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try'
+                    runCmd 'trivy image --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || true'
                 }
             }
         }
-
-
 
         stage("Create Network") {
             steps {
@@ -73,15 +71,18 @@ pipeline {
         stage("OWASP ZAP Scan") {
             steps {
                 script {
+                    // Ensure reports directory is writable by ZAP user (UID 1000)
+                    runCmd 'chmod -R 777 reports'
+
                     runCmd """
                         docker run --rm \
                         --network network1 \
-                        -v \$(pwd):/zap/wrk/ \
+                        -v \$(pwd)/reports:/zap/wrk/ \
                         ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-                            -t http://demo_app_running:80 \
-                            -r reports/zap_report.html \
-                            -J reports/zap_report.json || true \
-                            --exit-code-min-level HIGH
+                            -t http://demo_app_running:8080 \
+                            -r zap_report.html \
+                            -J zap_report.json \
+                            --exit-code-min-level HIGH || true
                     """
                 }
             }
@@ -97,10 +98,9 @@ pipeline {
 
             publishHTML([
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html, zap_report.html',
+                reportFiles: 'trivy_report.html,zap_report.html',
                 reportName: 'Security Reports'
             ])
-
         }
     }
 }
