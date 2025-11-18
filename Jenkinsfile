@@ -30,7 +30,8 @@ pipeline {
             steps {
                 script {
                     // Ensure reports directory exists
-                    runCmd 'mkdir -p reports'
+                    runCmd 'rm -rf reports'
+                    runCmd 'mkdir reports'
 
                     // JSON report (machine-readable)
                     runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try'
@@ -40,6 +41,7 @@ pipeline {
                 }
             }
         }
+
 
         stage("Create Network") {
             steps {
