@@ -60,7 +60,7 @@ pipeline {
                         docker run -d --rm \
                             --network network1 \
                             --name demo_app_running \
-                            -p 8080:8080 \
+                            -p 8080:80 \
                             demo_app_try:latest
                     '''
                     runCmd 'sleep 8'
