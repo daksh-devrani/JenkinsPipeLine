@@ -1,64 +1,86 @@
+def runCmd(cmd) {
+    if (isUnix()) {
+        sh(script: cmd)
+    } else {
+        bat(script: cmd)
+    }
+}
+
 pipeline {
     agent any
 
     stages {
         stage("Build Docker Image") {
             steps {
-                sh 'docker build -t demo_app_try:latest .'
+                script {
+                    runCmd 'docker build -t demo_app_try:latest .'
+                }
             }
         }
 
         stage("Cleanup Docker") {
             steps {
-                sh 'docker image prune -f'
+                script {
+                    runCmd 'docker image prune -f'
+                }
             }
         }
 
         stage("Trivy Scan") {
             steps {
-                sh 'trivy image --exit-code 1 --severity MODERATE,HIGH,CRITICAL demo_app_try'
+                script {
+                    runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_repost.json --severity MODERATE,HIGH,CRITICAL demo_app_try'
+                }
             }
         }
 
         stage("Create Network") {
             steps {
-                sh 'docker network inspect network1 >/dev/null 2>&1 || docker network create network1'
+                script {
+                    runCmd 'docker network inspect network1 >/dev/null 2>&1 || docker network create network1'
+                }
             }
         }
 
         stage("Run App Container") {
             steps {
-                sh '''
-                    docker run -d --rm \
-                        --network network1 \
-                        --name demo_app_running \
-                        -p 8080:8080 \
-                        demo_app_try:latest
-                '''
-                sh 'sleep 8'
+                script {
+                    runCmd '''
+                        docker run -d --rm \
+                            --network network1 \
+                            --name demo_app_running \
+                            -p 8080:8080 \
+                            demo_app_try:latest
+                    '''
+                    runCmd 'sleep 8'
+                }
             }
         }
 
         stage("OWASP ZAP Scan") {
             steps {
-                sh """
-                docker run --rm \
-                    --network network1 \
-                    -v \$(pwd):/zap/wrk/ \
-                    ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-                        -t http://demo_app_running:80 \
-                        -r zap_report.html \
-                        -J zap_report.json || true \
-                        --exit-code-min-level HIGH
-                """
+                script {
+                    runCmd """
+                        docker run --rm \
+                        --network network1 \
+                        -v \$(pwd):/zap/wrk/ \
+                        ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+                            -t http://demo_app_running:80 \
+                            -r reports/zap_report.html \
+                            -J reports/zap_report.json || true \
+                            --exit-code-min-level HIGH
+                    """
+                }
             }
         }
-
     }
+
     post {
         always {
-            sh 'docker stop demo_app_running || true'
-            sh 'docker network rm network1 || true'
+            script {
+                runCmd 'docker stop demo_app_running || true'
+                runCmd 'docker network rm network1 || true'
+            }
         }
     }
 }
