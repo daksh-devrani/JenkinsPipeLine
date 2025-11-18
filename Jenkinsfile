@@ -29,9 +29,14 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    runCmd 'rm -rf reports'
-                    runCmd 'mkdir reports'
-                    runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_repost.json --severity MEDIUM,HIGH,CRITICAL demo_app_try'
+                    // Ensure reports directory exists
+                    runCmd 'mkdir -p reports'
+
+                    // JSON report (machine-readable)
+                    runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try'
+
+                    // HTML report (human-readable)
+                    runCmd 'trivy image --exit-code 1 --format template --template "@contrib/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try'
                 }
             }
         }
@@ -83,6 +88,13 @@ pipeline {
                 runCmd 'docker stop demo_app_running || true'
                 runCmd 'docker network rm network1 || true'
             }
+
+            publishHTML([
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html, zap_report.html',
+                reportName: 'Security Reports'
+            ])
+
         }
     }
 }
