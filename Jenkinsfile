@@ -29,7 +29,7 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_repost.json --severity MODERATE,HIGH,CRITICAL demo_app_try'
+                    runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_repost.json --severity MEDIUM,HIGH,CRITICAL demo_app_try'
                 }
             }
         }
