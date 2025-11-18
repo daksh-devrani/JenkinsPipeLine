@@ -99,7 +99,7 @@ pipeline {
             // install "publishHTML"
             publishHTML([
                 reportDir: 'reports',
-                reportFiles: 'trivy_repor   t.html,zap_report.html',
+                reportFiles: 'trivy_report.html,zap_report.html',
                 reportName: 'Security Reports'
             ])
         }
