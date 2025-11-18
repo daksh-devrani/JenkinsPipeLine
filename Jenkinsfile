@@ -77,12 +77,12 @@ pipeline {
                     runCmd """
                         docker run --rm \
                         --network network1 \
-                        -v \$(pwd)/reports:/zap/wrk/ \
+                        -v $(pwd)/reports:/zap/wrk/ \
                         ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
                             -t http://demo_app_running:8080 \
                             -r zap_report.html \
                             -J zap_report.json \
-                            --exit-code-min-level HIGH || true
+                            -l FAIL || true
                     """
                 }
             }
