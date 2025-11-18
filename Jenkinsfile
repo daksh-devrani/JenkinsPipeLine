@@ -79,7 +79,7 @@ pipeline {
                         --network network1 \
                         -v $(pwd)/reports:/zap/wrk/ \
                         ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-                            -t http://demo_app_running:8080 \
+                            -t http://demo_app_running:80 \
                             -r zap_report.html \
                             -J zap_report.json \
                             -l FAIL || true
@@ -98,7 +98,7 @@ pipeline {
 
             publishHTML([
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_report.html',
+                reportFiles: 'trivy_repor   t.html,zap_report.html',
                 reportName: 'Security Reports'
             ])
         }
