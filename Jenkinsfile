@@ -33,14 +33,18 @@ pipeline {
                     runCmd 'rm -rf reports'
                     runCmd 'mkdir reports'
 
+                    // Download HTML template
+                    runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
+
                     // JSON report (machine-readable)
                     runCmd 'trivy image --exit-code 1 --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try'
 
                     // HTML report (human-readable)
-                    runCmd 'trivy image --exit-code 1 --format template --template "@contrib/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try'
+                    runCmd 'trivy image --exit-code 1 --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try'
                 }
             }
         }
+
 
 
         stage("Create Network") {
