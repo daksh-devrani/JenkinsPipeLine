@@ -74,7 +74,7 @@ pipeline {
                     // Ensure reports directory is writable by ZAP user (UID 1000)
                     runCmd 'chmod -R 777 reports'
 
-                    runCmd """
+                    runCmd '''
                         docker run --rm \
                         --network network1 \
                         -v $(pwd)/reports:/zap/wrk/ \
@@ -83,7 +83,7 @@ pipeline {
                             -r zap_report.html \
                             -J zap_report.json \
                             -l FAIL || true
-                    """
+                    '''
                 }
             }
         }
