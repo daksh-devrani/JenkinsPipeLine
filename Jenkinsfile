@@ -34,7 +34,7 @@ pipeline {
                         sh 'rm -rf reports'
                     }
                     else {
-                        bat 'rd reports'
+                        bat 'IF EXIST reports ( rmdir /s /q reports )'
                     }
                     
                     runCmd 'mkdir reports'
