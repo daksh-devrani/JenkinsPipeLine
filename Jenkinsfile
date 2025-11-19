@@ -97,11 +97,11 @@ pipeline {
             }
 
             // install "publishHTML"
-            publishHTML([
-                reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_report.html',
-                reportName: 'Security Reports'
-            ])
+            // publishHTML([
+            //     reportDir: 'reports',
+            //     reportFiles: 'trivy_report.html,zap_report.html',
+            //     reportName: 'Security Reports'
+            // ])
         }
     }
 }
