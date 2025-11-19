@@ -31,7 +31,7 @@ pipeline {
                 script {
                     // Ensure reports directory exists
                     if(isUnix()){
-                        sh 'rm -rf reports"
+                        sh 'rm -rf reports'
                     }
                     else {
                         bat 'rd reports'
