@@ -30,7 +30,13 @@ pipeline {
             steps {
                 script {
                     // Ensure reports directory exists
-                    runCmd 'rm -rf reports'
+                    if(isUnix()){
+                        sh 'rm -rf reports"
+                    }
+                    else {
+                        bat 'rd reports'
+                    }
+                    
                     runCmd 'mkdir reports'
 
                     // Download HTML template
@@ -72,7 +78,12 @@ pipeline {
             steps {
                 script {
                     // Ensure reports directory is writable by ZAP user (UID 1000)
-                    runCmd 'chmod -R 777 reports'
+                    if(isUnix()){
+                        sh 'chmod -R 777 reports'
+                    }
+                    else {
+                        bat 'icacls reports /grant Everyone:(OI)(CI)F /T'
+                    }
 
                     runCmd '''
                         docker run --rm \
