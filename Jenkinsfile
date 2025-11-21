@@ -75,7 +75,7 @@ pipeline {
                         if (isUnix()) {
                             sh '''
                                 echo "$COSIGN_KEY" > cosign.key
-                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins@sha256:<digest>
+                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1>
                                 rm cosign.key
                             '''
                         } else {
