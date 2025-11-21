@@ -13,7 +13,7 @@ pipeline {
         stage("Build Docker Image") {
             steps {
                 script {
-                    runCmd 'docker build -t demo_app_try:latest .'
+                    runCmd 'docker build -t sreyassharma/signed_images_jenkins:1.0.1 .'
                 }
             }
         }
@@ -33,16 +33,24 @@ pipeline {
                     if (isUnix()) {
                         runCmd 'rm -rf reports'
                         runCmd 'mkdir -p reports'
-                        runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
-                        runCmd 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || true'
-                        runCmd 'trivy image --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || true'
+                        // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
+                        runCmd 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
+                        runCmd 'trivy image --format template --template "@tplFormat/html.tpl" -o tplFormat/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
                     } else {
                         runCmd 'rmdir /S /Q reports || echo No reports dir'
                         runCmd 'mkdir reports'
-                        runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
-                        runCmd 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || exit /b 0'
-                        runCmd 'trivy image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || exit /b 0'
+                        // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
+                        runCmd 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
+                        runCmd 'trivy image --format template --template "@tplFormat\\html.tpl" -o tplFormat\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
                     }
+                }
+            }
+        }
+
+        stage("Push Docker image to DockerHub") {
+            steps{
+                script {
+                    runCmd 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                 }
             }
         }
@@ -68,7 +76,7 @@ pipeline {
                                 --network network1 \
                                 --name demo_app_running \
                                 -p 8123:80 \
-                                demo_app_try:latest
+                                sreyassharma/signed_images_jenkins:1.0.1
                         '''
                         runCmd 'sleep 8'
                     } else {
@@ -77,7 +85,7 @@ pipeline {
                                 --network network1 ^
                                 --name demo_app_running ^
                                 -p 8123:80 ^
-                                demo_app_try:latest
+                                sreyassharma/signed_images_jenkins:1.0.1
                         '''
                         runCmd 'ping -n 9 127.0.0.1 >nul'
                     }
@@ -90,7 +98,7 @@ pipeline {
                 script {
                     if (isUnix()) {
                         runCmd 'chmod -R 777 reports'
-                        
+
                         runCmd '''
                             docker run --rm \
                             --network network1 \
