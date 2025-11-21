@@ -1,13 +1,13 @@
 def runCmd(cmd) {
-    bat(script: cmd)
+    if (isUnix()) {
+        sh(script: cmd)
+    } else {
+        bat(script: cmd)
+    }
 }
 
 pipeline {
     agent any
-
-    environment {
-        TRIVY_EXE = 'C:\\Trivy\\trivy.exe'
-    }
 
     stages {
         stage("Build Docker Image") {
@@ -29,22 +29,18 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    bat '''
-                    REM Clean up old reports folder if it exists
-                    IF EXIST reports ( rmdir /s /q reports )
+                    // Ensure reports directory exists
+                    runCmd 'rmdir /S /Q reports || echo No reports dir'
+                    runCmd 'mkdir reports'
 
-                    REM Create fresh reports directory
-                    mkdir reports
+                    // Download HTML template
+                    runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
 
-                    REM Download HTML template for Trivy report
-                    curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl
+                    // JSON report (machine-readable)
+                    runCmd 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || exit /b 0'
 
-                    echo Running Trivy JSON scan...
-                    "%TRIVY_EXE%" image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo Trivy JSON scan failed, continuing pipeline
-
-                    echo Running Trivy HTML scan...
-                    "%TRIVY_EXE%" image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo Trivy HTML scan failed, continuing pipeline
-                    '''
+                    // HTML report (human-readable)
+                    runCmd 'trivy image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || exit /b 0'
                 }
             }
         }
@@ -52,7 +48,6 @@ pipeline {
         stage("Create Network") {
             steps {
                 script {
-                    // Create docker network only if it doesn't already exist
                     runCmd 'docker network inspect network1 >nul 2>&1 || docker network create network1'
                 }
             }
@@ -61,13 +56,15 @@ pipeline {
         stage("Run App Container") {
             steps {
                 script {
-                    bat '''
-                    echo Starting demo_app_running container...
-                    docker run -d --rm --network network1 --name demo_app_running -p 8123:80 demo_app_try:latest
-
-                    echo Waiting for container to be ready...
-                    ping -n 9 127.0.0.1 >nul
+                    runCmd '''
+                        docker run -d --rm ^
+                            --network network1 ^
+                            --name demo_app_running ^
+                            -p 8123:80 ^
+                            demo_app_try:latest
                     '''
+                    // Replace sleep with ping for Windows
+                    runCmd 'ping -n 9 127.0.0.1 >nul'
                 }
             }
         }
@@ -75,19 +72,19 @@ pipeline {
         stage("OWASP ZAP Scan") {
             steps {
                 script {
-                    bat '''
-                    echo Setting permissions on reports folder...
-                    icacls reports /grant Everyone:(OI)(CI)F /T
+                    // Windows doesn’t have chmod, so skip or rely on Docker volume permissions
+                    // Ensure reports directory is writable
+                    // runCmd 'icacls reports /grant Everyone:F'
 
-                    echo Running OWASP ZAP baseline scan...
-                    docker run --rm ^
+                    runCmd '''
+                        docker run --rm ^
                         --network network1 ^
-                        -v "%cd%\\reports:/zap/wrk/" ^
+                        -v %cd%\\reports:/zap/wrk/ ^
                         ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
                             -t http://demo_app_running:80 ^
                             -r zap_report.html ^
                             -J zap_report.json ^
-                            -l FAIL || echo ZAP scan failed, continuing pipeline
+                            -l FAIL || exit /b 0
                     '''
                 }
             }
@@ -97,17 +94,16 @@ pipeline {
     post {
         always {
             script {
-                echo "Stopping app container and removing network (if they exist)..."
-                runCmd 'docker stop demo_app_running || echo demo_app_running already stopped or not found'
-                runCmd 'docker network rm network1 || echo network1 already removed or not found'
+                runCmd 'docker stop demo_app_running || exit /b 0'
+                runCmd 'docker network rm network1 || exit /b 0'
             }
 
-            // If you install the "HTML Publisher" plugin, uncomment this to publish reports:
-            // publishHTML([
-            //     reportDir: 'reports',
-            //     reportFiles: 'trivy_report.html,zap_report.html',
-            //     reportName: 'Security Reports'
-            // ])
+            // install "publishHTML"
+           // publishHTML([
+             //   reportDir: 'reports',
+             //   reportFiles: 'trivy_report.html,zap_report.html',
+               // reportName: 'Security Reports'
+          //  ])
         }
     }
 }
