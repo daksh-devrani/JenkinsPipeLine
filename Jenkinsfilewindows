@@ -1,98 +1,108 @@
+// Jenkinsfile
+
+// Helper to run the same command on Windows or Linux
+def runCmd(cmd) {
+    if (isUnix()) {
+        sh(script: cmd)
+    } else {
+        bat(script: cmd)
+    }
+}
+
 pipeline {
-    // Prefer a Windows node; adjust label if you have one like 'windows'
     agent any
+
+    environment {
+        // If PATH works: keep as 'trivy'
+        // If not, put full path, e.g. 'C:\\Program Files\\Trivy\\trivy.exe'
+        TRIVY_EXE = 'trivy'
+        IMAGE_NAME = 'demo_app_try'
+        IMAGE_TAG  = 'latest'
+    }
 
     stages {
 
-        stage("Build Docker Image") {
+        stage('Build Docker Image') {
             steps {
-                bat '''
-                    docker build -t demo_app_try:latest .
-                '''
+                script {
+                    runCmd """
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    """
+                }
             }
         }
 
-        stage("Cleanup Docker") {
+        stage('Trivy Scan') {
             steps {
-                bat '''
+                script {
+                    if (isUnix()) {
+                        // Linux/macOS version
+                        sh """
+                        rm -rf reports
+                        mkdir -p reports
+
+                        curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl
+
+                        echo "Running Trivy JSON scan..."
+                        ${TRIVY_EXE} image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG} || echo "Trivy JSON scan failed (continuing pipeline)"
+
+                        echo "Running Trivy HTML scan..."
+                        ${TRIVY_EXE} image --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG} || echo "Trivy HTML scan failed (continuing pipeline)"
+                        """
+                    } else {
+                        // Windows version
+                        bat """
+                        IF EXIST reports ( rmdir /s /q reports )
+                        mkdir reports
+
+                        curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl
+
+                        echo Running Trivy JSON scan...
+                        "C:\Trivy\trivy.exe" image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}  ||  echo "Trivy JSON scan failed (continuing pipeline)"
+
+                        echo Running Trivy HTML scan...
+                        "C:\Trivy\trivy.exe" image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}  ||  echo "Trivy HTML scan failed (continuing pipeline)"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('ZAP Scan (optional)') {
+            when {
+                expression { return false } // change to true if you want to enable later
+            }
+            steps {
+                script {
+                    runCmd """
+                    echo Run OWASP ZAP here if needed...
+                    """
+                }
+            }
+        }
+
+        stage('Cleanup Docker (optional)') {
+            steps {
+                script {
+                    runCmd """
                     docker image prune -f
-                '''
-            }
-        }
-
-        stage("Trivy Scan") {
-            steps {
-                bat '''
-                    REM Clean old reports
-                    IF EXIST reports ( rmdir /s /q reports )
-                    mkdir reports
-
-                    REM Download HTML template
-                    curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl
-
-                    REM JSON report (machine-readable)
-                    trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo "Trivy JSON scan failed (continuing pipeline)"
-
-                    REM HTML report (human-readable)
-                    trivy image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo "Trivy HTML scan failed (continuing pipeline)"
-                '''
-            }
-        }
-
-        stage("Create Network") {
-            steps {
-                bat '''
-                    docker network inspect network1 >NUL 2>&1 || docker network create network1
-                '''
-            }
-        }
-
-        stage("Run App Container") {
-            steps {
-                bat '''
-                    docker run -d --rm --network network1 --name demo_app_running -p 8123:80 demo_app_try:latest
-
-                    REM wait for container to start
-                    timeout /t 8 /nobreak >NUL
-                '''
-            }
-        }
-
-        stage("OWASP ZAP Scan") {
-            steps {
-                bat '''
-                    REM Ensure reports directory is writable
-                    icacls reports /grant Everyone:(OI)(CI)F /T
-
-                    REM Run ZAP baseline scan
-                    docker run --rm --network network1 -v "%cd%\\reports:/zap/wrk" ^
-                        ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
-                        -t http://demo_app_running:80 ^
-                        -r zap_report.html ^
-                        -J zap_report.json ^
-                        -l FAIL || echo "ZAP scan failed (continuing pipeline)"
-                '''
+                    """
+                }
             }
         }
     }
 
     post {
         always {
-            steps {
-                bat '''
-                    docker stop demo_app_running || echo "demo_app_running not running"
-                    docker network rm network1 || echo "network1 not present"
-                '''
+            // archive reports if they exist
+            script {
+                try {
+                    archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
+                } catch (ignored) {
+                    echo "No reports to archive."
+                }
             }
-
-            // When plugin is installed, you can uncomment:
-            /*
-            publishHTML([
-                reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_report.html',
-                reportName: 'Security Reports'
-            ])
-            */
+            cleanWs()
         }
     }
 }
