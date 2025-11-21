@@ -74,14 +74,18 @@ pipeline {
                     ]) {
                         if (isUnix()) {
                             sh '''
-                                echo "$COSIGN_KEY" > cosign.key
-                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1>
+                                cat > cosign.key <<EOF
+                                    $COSIGN_KEY
+                                    EOF
+
+                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
+
                                 rm cosign.key
                             '''
                         } else {
                             bat '''
                                 echo %COSIGN_KEY% > cosign.key
-                                cosign sign --key cosign.key --pass-env %COSIGN_PASSWORD% docker.io/sreyassharma/signed_images_jenkins:1.0.1
+                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
                                 del cosign.key
                             '''
                         }
@@ -89,6 +93,7 @@ pipeline {
                 }
             }
         }
+
 
         stage("Create Network") {
             steps {
