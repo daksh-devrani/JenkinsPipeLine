@@ -99,10 +99,13 @@ pipeline {
             }
 
             // install "publishHTML"
-            publishHTML([
-               reportDir: 'reports',
-               reportFiles: 'trivy_report.html,zap_report.html',
-               reportName: 'Security Reports'
+              publishHTML(target: [
+                allowMissing: true,               // don't fail build if report missing
+                alwaysLinkToLastBuild: true,
+                keepAll: true,                    // keep reports for all builds
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html,zap_report.html',
+                reportName: 'Security Reports'
             ])
         }
     }
