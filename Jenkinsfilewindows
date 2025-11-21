@@ -1,81 +1,98 @@
+def runCmd(cmd) {
+    // Purely Windows: always use bat
+    bat(script: cmd)
+}
+
 pipeline {
     agent any
 
     environment {
-        // Path to Trivy on your Windows machine (NOTE: double backslashes for Groovy)
+        // Path to Trivy on your Windows machine (double backslashes for Groovy)
+        // If trivy is already on PATH, you can set: TRIVY_EXE = 'trivy'
         TRIVY_EXE = 'C:\\Trivy\\trivy.exe'
-
-        IMAGE_NAME = 'demo_app_try'
-        IMAGE_TAG  = 'latest'
     }
 
     stages {
-
-        stage('Build Docker Image') {
+        stage("Build Docker Image") {
             steps {
-                bat """
-                echo Building Docker image...
-                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                """
+                script {
+                    runCmd 'docker build -t demo_app_try:latest .'
+                }
             }
         }
 
-        stage('Trivy Scan') {
+        stage("Cleanup Docker") {
             steps {
-                bat """
-                echo ===============================
-                echo Running Trivy Scan (JSON+HTML)
-                echo ===============================
-
-                REM Clean and recreate reports folder
-                IF EXIST reports ( rmdir /s /q reports )
-                mkdir reports
-
-                REM Download HTML template for Trivy
-                curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl
-
-                echo Running Trivy JSON scan...
-                "%TRIVY_EXE%" image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}  ||  echo "Trivy JSON scan failed (continuing pipeline)"
-
-                echo Running Trivy HTML scan...
-                "%TRIVY_EXE%" image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}  ||  echo "Trivy HTML scan failed (continuing pipeline)"
-
-                echo Trivy Scan stage completed.
-                """
+                script {
+                    runCmd 'docker image prune -f'
+                }
             }
         }
 
-        stage('ZAP Scan') {
+        stage("Trivy Scan") {
             steps {
-                bat """
-                echo =========================
-                echo Running ZAP Baseline Scan
-                echo =========================
+                script {
+                    bat '''
+                    REM Clean up old reports folder if it exists
+                    IF EXIST reports ( rmdir /s /q reports )
 
-                REM Ensure reports folder exists (reuse same folder as Trivy)
-                IF NOT EXIST reports ( mkdir reports )
+                    REM Create fresh reports directory
+                    mkdir reports
 
-                REM Run OWASP ZAP baseline scan
-                docker run --rm ^
-                  --network network1 ^
-                  -v "%cd%\\reports:/zap/wrk/" ^
-                  ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
-                    -t http://demo_app_running:80 ^
-                    -r zap_report.html ^
-                    -J zap_report.json ^
-                    -l FAIL || echo "ZAP scan failed (continuing pipeline)"
+                    REM Download HTML template for Trivy report
+                    curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl
 
-                echo ZAP Scan stage completed.
-                """
+                    echo Running Trivy JSON scan...
+                    "%TRIVY_EXE%" image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo Trivy JSON scan failed, continuing pipeline
+
+                    echo Running Trivy HTML scan...
+                    "%TRIVY_EXE%" image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo Trivy HTML scan failed, continuing pipeline
+                    '''
+                }
             }
         }
 
-        stage('Cleanup Docker') {
+        stage("Create Network") {
             steps {
-                bat """
-                echo Cleaning up dangling Docker images...
-                docker image prune -f || echo "Docker cleanup failed (continuing pipeline)"
-                """
+                script {
+                    // Create docker network only if it doesn't already exist
+                    runCmd 'docker network inspect network1 >nul 2>&1 || docker network create network1'
+                }
+            }
+        }
+
+        stage("Run App Container") {
+            steps {
+                script {
+                    bat '''
+                    echo Starting demo_app_running container...
+                    docker run -d --rm --network network1 --name demo_app_running -p 8123:80 demo_app_try:latest
+
+                    echo Waiting for container to be ready...
+                    timeout /T 8 /NOBREAK
+                    '''
+                }
+            }
+        }
+
+        stage("OWASP ZAP Scan") {
+            steps {
+                script {
+                    bat '''
+                    echo Setting permissions on reports folder...
+                    icacls reports /grant Everyone:(OI)(CI)F /T
+
+                    echo Running OWASP ZAP baseline scan...
+                    docker run --rm ^
+                        --network network1 ^
+                        -v "%cd%\\reports:/zap/wrk/" ^
+                        ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
+                            -t http://demo_app_running:80 ^
+                            -r zap_report.html ^
+                            -J zap_report.json ^
+                            -l FAIL || echo ZAP scan failed, continuing pipeline
+                    '''
+                }
             }
         }
     }
@@ -83,14 +100,17 @@ pipeline {
     post {
         always {
             script {
-                echo 'Archiving reports (if any)...'
-                try {
-                    archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
-                } catch (ignored) {
-                    echo 'No reports to archive.'
-                }
+                echo "Stopping app container and removing network (if they exist)..."
+                runCmd 'docker stop demo_app_running || echo demo_app_running already stopped or not found'
+                runCmd 'docker network rm network1 || echo network1 already removed or not found'
             }
-            cleanWs()
+
+            // If you install the "HTML Publisher" plugin, uncomment this to publish reports:
+            // publishHTML([
+            //     reportDir: 'reports',
+            //     reportFiles: 'trivy_report.html,zap_report.html',
+            //     reportName: 'Security Reports'
+            // ])
         }
     }
 }
