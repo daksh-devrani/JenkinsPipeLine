@@ -12,7 +12,7 @@ pipeline {
     environment {
         // On Linux/macOS: keep as 'trivy'
         // On Windows: either ensure 'trivy' is in PATH or replace with full path, e.g. 'C:\\Trivy\\trivy.exe'
-        TRIVY_EXE = 'trivy'
+        TRIVY_EXE = 'C:\\Trivy\\trivy.exe'
     }
 
     stages {
