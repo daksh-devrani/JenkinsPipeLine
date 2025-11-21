@@ -31,17 +31,17 @@ pipeline {
                 script {
                     // Ensure reports directory exists
                     if (isUnix()) {
-                        runCmd 'rm -rf reports'
-                        runCmd 'mkdir -p reports'
+                        sh 'rm -rf reports'
+                        sh 'mkdir -p reports'
                         // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
-                        runCmd 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
-                        runCmd 'trivy image --format template --template "@tplFormat/html.tpl" -o tplFormat/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
+                        sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
+                        sh 'trivy image --format template --template "@tplFormat/html.tpl" -o tplFormat/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
                     } else {
-                        runCmd 'rmdir /S /Q reports || echo No reports dir'
-                        runCmd 'mkdir reports'
+                        bat 'rmdir /S /Q reports || echo No reports dir'
+                        bat 'mkdir reports'
                         // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
-                        runCmd 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
-                        runCmd 'trivy image --format template --template "@tplFormat\\html.tpl" -o tplFormat\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
+                        bat 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
+                        bat 'trivy image --format template --template "@tplFormat\\html.tpl" -o tplFormat\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
                     }
                 }
             }
@@ -52,29 +52,38 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         if (isUnix()) {
-                            runCmd 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                            runCmd 'docker push sreyassharma/signed_images_jenkins:1.0.1'
+                            sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                            sh 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                         } else {
-                            runCmd 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
-                            runCmd 'docker push sreyassharma/signed_images_jenkins:1.0.1'
+                            bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                            bat 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                         }
                     }
                 }
             }
         }
 
+
+        // i can use digest but is bit complex
         stage("Sign Docker Image") {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY')]) {
+                    withCredentials([
+                        string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY'),
+                        string(credentialsId: 'CosignPassword', variable: 'COSIGN_PASSWORD')
+                    ]) {
                         if (isUnix()) {
-                            runCmd "echo \"$COSIGN_KEY\" > cosign.key"
-                            runCmd "cosign sign --key cosign.key docker.io/sreyassharma/signed_images_jenkins:1.0.1"
-                            runCmd "rm cosign.key"    // Linux
+                            sh '''
+                                echo "$COSIGN_KEY" > cosign.key
+                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins@sha256:<digest>
+                                rm cosign.key
+                            '''
                         } else {
-                            runCmd "echo %COSIGN_KEY% > cosign.key"
-                            runCmd "cosign sign --key cosign.key docker.io/sreyassharma/signed_images_jenkins:1.0.1"
-                            runCmd "del cosign.key"   // Windows
+                            bat '''
+                                echo %COSIGN_KEY% > cosign.key
+                                cosign sign --key cosign.key --pass-env %COSIGN_PASSWORD% docker.io/sreyassharma/signed_images_jenkins:1.0.1
+                                del cosign.key
+                            '''
                         }
                     }
                 }
@@ -85,9 +94,9 @@ pipeline {
             steps {
                 script {
                     if (isUnix()) {
-                        runCmd 'docker network inspect network1 >/dev/null 2>&1 || docker network create network1'
+                        sh 'docker network inspect network1 >/dev/null 2>&1 || docker network create network1'
                     } else {
-                        runCmd 'docker network inspect network1 >nul 2>&1 || docker network create network1'
+                        bat 'docker network inspect network1 >nul 2>&1 || docker network create network1'
                     }
                 }
             }
@@ -97,23 +106,23 @@ pipeline {
             steps {
                 script {
                     if (isUnix()) {
-                        runCmd '''
+                        sh '''
                             docker run -d --rm \
                                 --network network1 \
                                 --name demo_app_running \
                                 -p 8123:80 \
                                 sreyassharma/signed_images_jenkins:1.0.1
                         '''
-                        runCmd 'sleep 8'
+                        sh 'sleep 8'
                     } else {
-                        runCmd '''
+                        bat '''
                             docker run -d --rm ^
                                 --network network1 ^
                                 --name demo_app_running ^
                                 -p 8123:80 ^
                                 sreyassharma/signed_images_jenkins:1.0.1
                         '''
-                        runCmd 'ping -n 9 127.0.0.1 >nul'
+                        bat 'ping -n 9 127.0.0.1 >nul'
                     }
                 }
             }
@@ -123,9 +132,9 @@ pipeline {
             steps {
                 script {
                     if (isUnix()) {
-                        runCmd 'chmod -R 777 reports'
+                        sh 'chmod -R 777 reports'
 
-                        runCmd '''
+                        sh '''
                             docker run --rm \
                             --network network1 \
                             -v $(pwd)/reports:/zap/wrk/ \
@@ -136,7 +145,7 @@ pipeline {
                                 -l FAIL || true
                         '''
                     } else {
-                        runCmd '''
+                        bat '''
                             docker run --rm ^
                             --network network1 ^
                             -v %cd%\\reports:/zap/wrk/ ^
