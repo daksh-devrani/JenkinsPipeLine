@@ -215,7 +215,7 @@ pipeline {
                 keepAll: true,                    // keep reports for all builds
 
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_report.html',
+                reportFiles: 'trivy_report.html,zap_full_report.html',
                 reportName: 'Security Reports'
              ])
         }
