@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // Path to your Trivy executable on Windows
+        // Path to Trivy on your Windows machine (NOTE: double backslashes for Groovy)
         TRIVY_EXE = 'C:\\Trivy\\trivy.exe'
 
         IMAGE_NAME = 'demo_app_try'
@@ -14,6 +14,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 bat """
+                echo Building Docker image...
                 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
                 """
             }
@@ -22,6 +23,10 @@ pipeline {
         stage('Trivy Scan') {
             steps {
                 bat """
+                echo ===============================
+                echo Running Trivy Scan (JSON+HTML)
+                echo ===============================
+
                 REM Clean and recreate reports folder
                 IF EXIST reports ( rmdir /s /q reports )
                 mkdir reports
@@ -34,14 +39,42 @@ pipeline {
 
                 echo Running Trivy HTML scan...
                 "%TRIVY_EXE%" image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}  ||  echo "Trivy HTML scan failed (continuing pipeline)"
+
+                echo Trivy Scan stage completed.
                 """
             }
         }
 
-        stage('Cleanup Docker (optional)') {
+        stage('ZAP Scan') {
             steps {
                 bat """
-                docker image prune -f
+                echo =========================
+                echo Running ZAP Baseline Scan
+                echo =========================
+
+                REM Ensure reports folder exists (reuse same folder as Trivy)
+                IF NOT EXIST reports ( mkdir reports )
+
+                REM Run OWASP ZAP baseline scan
+                docker run --rm ^
+                  --network network1 ^
+                  -v "%cd%\\reports:/zap/wrk/" ^
+                  ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
+                    -t http://demo_app_running:80 ^
+                    -r zap_report.html ^
+                    -J zap_report.json ^
+                    -l FAIL || echo "ZAP scan failed (continuing pipeline)"
+
+                echo ZAP Scan stage completed.
+                """
+            }
+        }
+
+        stage('Cleanup Docker') {
+            steps {
+                bat """
+                echo Cleaning up dangling Docker images...
+                docker image prune -f || echo "Docker cleanup failed (continuing pipeline)"
                 """
             }
         }
@@ -50,13 +83,14 @@ pipeline {
     post {
         always {
             script {
-                // Archive reports if present
+                echo 'Archiving reports (if any)...'
                 try {
                     archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
                 } catch (ignored) {
                     echo 'No reports to archive.'
                 }
             }
+            cleanWs()
         }
     }
 }
