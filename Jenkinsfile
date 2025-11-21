@@ -89,6 +89,8 @@ pipeline {
             steps {
                 script {
                     if (isUnix()) {
+                        runCmd 'chmod -R 777 reports'
+                        
                         runCmd '''
                             docker run --rm \
                             --network network1 \
@@ -130,13 +132,13 @@ pipeline {
 
             // publishHTML can stay the same
              publishHTML([
-		allowMissing: true,               // don't fail build if report missing
+		        allowMissing: true,               // don't fail build if report missing
                 alwaysLinkToLastBuild: true,
                 keepAll: true,                    // keep reports for all builds
 
-                 reportDir: 'reports',
-                 reportFiles: 'trivy_report.html,zap_report.html',
-                 reportName: 'Security Reports'
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html,zap_report.html',
+                reportName: 'Security Reports'
              ])
         }
     }
