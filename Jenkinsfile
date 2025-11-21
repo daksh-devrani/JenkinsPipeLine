@@ -34,14 +34,14 @@ pipeline {
                         sh 'rm -rf reports'
                         sh 'mkdir -p reports'
                         // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
-                        sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
-                        sh 'trivy image --format template --template "@tplFormat/html.tpl" -o tplFormat/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || true'
+                        sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
+                        sh 'trivy image --format template --template "@tplFormat/html.tpl" -o tplFormat/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
                     } else {
                         bat 'rmdir /S /Q reports || echo No reports dir'
                         bat 'mkdir reports'
                         // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
-                        bat 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
-                        bat 'trivy image --format template --template "@tplFormat\\html.tpl" -o tplFormat\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins || exit /b 0'
+                        bat 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
+                        bat 'trivy image --format template --template "@tplFormat\\html.tpl" -o tplFormat\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
                     }
                 }
             }
