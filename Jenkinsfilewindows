@@ -1,0 +1,98 @@
+pipeline {
+    // Prefer a Windows node; adjust label if you have one like 'windows'
+    agent any
+
+    stages {
+
+        stage("Build Docker Image") {
+            steps {
+                bat '''
+                    docker build -t demo_app_try:latest .
+                '''
+            }
+        }
+
+        stage("Cleanup Docker") {
+            steps {
+                bat '''
+                    docker image prune -f
+                '''
+            }
+        }
+
+        stage("Trivy Scan") {
+            steps {
+                bat '''
+                    REM Clean old reports
+                    IF EXIST reports ( rmdir /s /q reports )
+                    mkdir reports
+
+                    REM Download HTML template
+                    curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl
+
+                    REM JSON report (machine-readable)
+                    trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo "Trivy JSON scan failed (continuing pipeline)"
+
+                    REM HTML report (human-readable)
+                    trivy image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL demo_app_try || echo "Trivy HTML scan failed (continuing pipeline)"
+                '''
+            }
+        }
+
+        stage("Create Network") {
+            steps {
+                bat '''
+                    docker network inspect network1 >NUL 2>&1 || docker network create network1
+                '''
+            }
+        }
+
+        stage("Run App Container") {
+            steps {
+                bat '''
+                    docker run -d --rm --network network1 --name demo_app_running -p 8123:80 demo_app_try:latest
+
+                    REM wait for container to start
+                    timeout /t 8 /nobreak >NUL
+                '''
+            }
+        }
+
+        stage("OWASP ZAP Scan") {
+            steps {
+                bat '''
+                    REM Ensure reports directory is writable
+                    icacls reports /grant Everyone:(OI)(CI)F /T
+
+                    REM Run ZAP baseline scan
+                    docker run --rm --network network1 -v "%cd%\\reports:/zap/wrk" ^
+                        ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
+                        -t http://demo_app_running:80 ^
+                        -r zap_report.html ^
+                        -J zap_report.json ^
+                        -l FAIL || echo "ZAP scan failed (continuing pipeline)"
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            steps {
+                bat '''
+                    docker stop demo_app_running || echo "demo_app_running not running"
+                    docker network rm network1 || echo "network1 not present"
+                '''
+            }
+
+            // When plugin is installed, you can uncomment:
+            /*
+            publishHTML([
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html,zap_report.html',
+                reportName: 'Security Reports'
+            ])
+            */
+        }
+    }
+}
