@@ -47,13 +47,22 @@ pipeline {
             }
         }
 
-        stage("Push Docker image to DockerHub") {
-            steps{
+        stage("Push Docker Image") {
+            steps {
                 script {
-                    runCmd 'docker push sreyassharma/signed_images_jenkins:1.0.1'
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        if (isUnix()) {
+                            runCmd "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                            runCmd "docker push sreyassharma/signed_images_jenkins:1.0.1"
+                        } else {
+                            runCmd "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
+                            runCmd "docker push sreyassharma/signed_images_jenkins:1.0.1"
+                        }
+                    }
                 }
             }
         }
+
 
         stage("Create Network") {
             steps {
