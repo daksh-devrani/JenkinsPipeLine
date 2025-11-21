@@ -1,5 +1,4 @@
 def runCmd(cmd) {
-    // Purely Windows: always use bat
     bat(script: cmd)
 }
 
@@ -7,8 +6,6 @@ pipeline {
     agent any
 
     environment {
-        // Path to Trivy on your Windows machine (double backslashes for Groovy)
-        // If trivy is already on PATH, you can set: TRIVY_EXE = 'trivy'
         TRIVY_EXE = 'C:\\Trivy\\trivy.exe'
     }
 
