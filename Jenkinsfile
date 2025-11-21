@@ -134,36 +134,66 @@ pipeline {
         }
 
         stage("OWASP ZAP Scan") {
-            steps {
-                script {
-                    if (isUnix()) {
-                        sh 'chmod -R 777 reports'
-
-                        sh '''
-                            docker run --rm \
-                            --network network1 \
-                            -v $(pwd)/reports:/zap/wrk/ \
-                            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-                                -t http://demo_app_running:80 \
-                                -r zap_report.html \
-                                -J zap_report.json \
-                                -l FAIL || true
-                        '''
-                    } else {
-                        bat '''
-                            docker run --rm ^
-                            --network network1 ^
-                            -v %cd%\\reports:/zap/wrk/ ^
-                            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
-                                -t http://demo_app_running:80 ^
-                                -r zap_report.html ^
-                                -J zap_report.json ^
-                                -l FAIL || exit /b 0
-                        '''
-                    }
-                }
-            }
-        }
+		    steps {
+		        script {
+		            if (isUnix()) {
+		                sh 'chmod -R 777 reports'
+		
+		                sh '''
+		                    docker run --rm \
+		                    --network network1 \
+		                    -v $(pwd)/reports:/zap/wrk/ \
+		                    ghcr.io/zaproxy/zaproxy:stable zap.sh -cmd \
+		                        -addonupdate \
+		                        -addoninstall ascanrulesAlpha \
+		                        -addoninstall ascanrulesBeta \
+		                        -addoninstall pscanrulesAlpha \
+		                        -addoninstall pscanrulesBeta \
+		                        -addoninstall retire \
+		                        -addoninstall fuzzer \
+		                        -addoninstall openapi \
+		                        -addoninstall graphql \
+		                        -addoninstall log4shell
+		
+		                    docker run --rm \
+		                    --network network1 \
+		                    -v $(pwd)/reports:/zap/wrk/ \
+		                    ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+		                        -t http://demo_app_running:80 \
+		                        -r zap_full_report.html \
+		                        -J zap_full_report.json \
+		                        -a || true
+		                '''
+		            } else {
+		                bat '''
+		                    docker run --rm ^
+		                    --network network1 ^
+		                    -v %cd%\\reports:/zap/wrk/ ^
+		                    ghcr.io/zaproxy/zaproxy:stable zap.sh -cmd^
+		                        -addonupdate ^
+		                        -addoninstall ascanrulesAlpha ^
+		                        -addoninstall ascanrulesBeta ^
+		                        -addoninstall pscanrulesAlpha ^
+		                        -addoninstall pscanrulesBeta ^
+		                        -addoninstall retire ^
+		                        -addoninstall fuzzer ^
+		                        -addoninstall openapi ^
+		                        -addoninstall graphql ^
+		                        -addoninstall log4shell
+		
+		                    docker run --rm ^
+		                    --network network1 ^
+		                    -v %cd%\\reports:/zap/wrk/ ^
+		                    ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
+		                        -t http://demo_app_running:80 ^
+		                        -r zap_full_report.html ^
+		                        -J zap_full_report.json ^
+		                        -a || exit /b 0
+		                '''
+		            }
+		        }
+		    }
+		}
     }
 
     post {
