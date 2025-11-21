@@ -63,6 +63,23 @@ pipeline {
             }
         }
 
+        stage("Sign Docker Image") {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY')]) {
+                        if (isUnix()) {
+                            runCmd "echo \"$COSIGN_KEY\" > cosign.key"
+                            runCmd "cosign sign --key cosign.key docker.io/sreyassharma/signed_images_jenkins:1.0.1"
+                            runCmd "rm cosign.key"    // Linux
+                        } else {
+                            runCmd "echo %COSIGN_KEY% > cosign.key"
+                            runCmd "cosign sign --key cosign.key docker.io/sreyassharma/signed_images_jenkins:1.0.1"
+                            runCmd "del cosign.key"   // Windows
+                        }
+                    }
+                }
+            }
+        }
 
         stage("Create Network") {
             steps {
