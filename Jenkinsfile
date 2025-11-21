@@ -52,11 +52,11 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         if (isUnix()) {
-                            runCmd "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                            runCmd "docker push sreyassharma/signed_images_jenkins:1.0.1"
+                            runCmd 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                            runCmd 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                         } else {
-                            runCmd "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
-                            runCmd "docker push sreyassharma/signed_images_jenkins:1.0.1"
+                            runCmd 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                            runCmd 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                         }
                     }
                 }
