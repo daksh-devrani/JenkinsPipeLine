@@ -6,6 +6,11 @@ def runCmd(cmd) {
 pipeline {
     agent any
 
+    environment {
+        // FIXED PATHS FOR TRIVY AND SNYK (WINDOWS)
+        PATH = "C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
+    }
+
     stages {
 
         /* -------------------------------------------
@@ -31,12 +36,12 @@ pipeline {
         }
 
         /* -------------------------------------------
-           TRIVY SCAN (uses installed Trivy)
+           TRIVY SCAN
         ------------------------------------------- */
         stage("Trivy Scan") {
             steps {
                 script {
-                    bat 'rmdir /S /Q reports || echo No reports'
+                    bat 'rmdir /S /Q reports || echo "no reports"'
                     bat 'mkdir reports'
 
                     bat '''
