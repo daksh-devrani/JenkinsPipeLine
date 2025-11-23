@@ -7,13 +7,12 @@ pipeline {
     agent any
 
     environment {
-        
-        PATH = "C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
+        GRYPE_PATH = "C:\\Program Files\\Grype"
+        PATH = "${GRYPE_PATH};C:\\Trivy;C:\\Program Files\\Snyk;${env.PATH}"
     }
 
     stages {
 
-      
         stage("Build Docker Image") {
             steps {
                 script {
@@ -30,7 +29,6 @@ pipeline {
             }
         }
 
-       
         stage("Trivy Scan") {
             steps {
                 script {
@@ -57,7 +55,6 @@ pipeline {
             }
         }
 
-      
         stage("Snyk SAST Scan") {
             steps {
                 script {
@@ -106,6 +103,49 @@ pipeline {
             }
         }
 
+        stage("Grype Scan") {
+            steps {
+                script {
+                    echo "Running Grype vulnerability scan on Docker image..."
+
+                    bat "if not exist reports mkdir reports"
+
+                    def grypeStatus = bat(returnStatus: true, script: 'where grype')
+                    if (grypeStatus != 0) {
+                        echo "WARNING: Grype not found on PATH. Make sure Grype is installed on the Jenkins agent."
+                    }
+
+                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o json > \"%cd%\\reports\\grype_report.json\" || exit 0"
+                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o table > \"%cd%\\reports\\grype_report.txt\" || exit 0"
+
+                    def foundHigh = bat(returnStatus: true, script: '%COMSPEC% /C findstr /I "CRITICAL HIGH" "%cd%\\reports\\grype_report.json"')
+                    if (foundHigh == 0) {
+                        echo "Grype found HIGH or CRITICAL vulnerabilities. Marking build UNSTABLE."
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "No HIGH/CRITICAL vulnerabilities discovered by simple string check."
+                    }
+                }
+            }
+
+            post {
+                always {
+                    echo "Publishing Grype Reports..."
+
+                    archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
+
+                    publishHTML([
+                        allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        reportDir: 'reports',
+                        reportFiles: 'grype_report.txt',
+                        reportName: 'Grype Vulnerability Report'
+                    ])
+                }
+            }
+        }
+
         stage("Push Docker Image") {
             steps {
                 script {
@@ -117,7 +157,6 @@ pipeline {
             }
         }
 
-  
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -135,7 +174,6 @@ pipeline {
             }
         }
 
-      
         stage("Create Network") {
             steps {
                 script {
@@ -144,7 +182,6 @@ pipeline {
             }
         }
 
-       
         stage("Run App Container") {
             steps {
                 script {
@@ -160,7 +197,6 @@ pipeline {
             }
         }
 
-    
         stage("OWASP ZAP Scan") {
             steps {
                 script {
@@ -179,7 +215,6 @@ pipeline {
         }
     }
 
-   
     post {
         always {
             script {
