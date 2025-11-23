@@ -1,11 +1,12 @@
 /*
-   OPTIMIZED JENKINSFILE — DevSecOps Pipeline
-   ✔ Cross-platform (Windows/Linux)
-   ✔ Trivy Scan
-   ✔ Push Image
-   ✔ Cosign Signing
-   ✔ OWASP ZAP Scan
-   ✔ HTML Reporting
+    FINAL OPTIMIZED DEVSECOPS JENKINSFILE
+    ✔ Cross-platform: Windows + Linux
+    ✔ Docker Build
+    ✔ Trivy Scan
+    ✔ Push Docker Image
+    ✔ Cosign Signing
+    ✔ OWASP ZAP Scan
+    ✔ HTML Reports
 */
 
 def runCmd(cmd) {
@@ -27,7 +28,7 @@ pipeline {
     stages {
 
         /* ----------------------------------------------------------------------
-                                BUILD DOCKER IMAGE
+                                   BUILD DOCKER IMAGE
         ---------------------------------------------------------------------- */
         stage("Build Docker Image") {
             steps {
@@ -38,7 +39,7 @@ pipeline {
         }
 
         /* ----------------------------------------------------------------------
-                                CLEANUP DOCKER
+                                   CLEANUP DOCKER
         ---------------------------------------------------------------------- */
         stage("Cleanup Docker") {
             steps {
@@ -49,7 +50,7 @@ pipeline {
         }
 
         /* ----------------------------------------------------------------------
-                                TRIVY SCAN
+                                   TRIVY SCAN
         ---------------------------------------------------------------------- */
         stage("Trivy Scan") {
             steps {
@@ -58,6 +59,7 @@ pipeline {
                         sh '''
                             rm -rf reports
                             mkdir -p reports
+
                             trivy image --format json -o reports/trivy_report.json \
                                 --severity MEDIUM,HIGH,CRITICAL $IMAGE || true
 
@@ -79,21 +81,36 @@ pipeline {
         }
 
         /* ----------------------------------------------------------------------
-                                PUSH DOCKER IMAGE
+                                   PUSH DOCKER IMAGE
         ---------------------------------------------------------------------- */
         stage("Push Docker Image") {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        runCmd('echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'.replace("%","$"))
-                        runCmd("docker push ${IMAGE}")
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'Docker',
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                        )
+                    ]) {
+                        if (isUnix()) {
+                            sh """
+                                echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                                docker push ${IMAGE}
+                            """
+                        } else {
+                            bat """
+                                echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
+                                docker push ${IMAGE}
+                            """
+                        }
                     }
                 }
             }
         }
 
         /* ----------------------------------------------------------------------
-                                SIGN DOCKER IMAGE (COSIGN)
+                                   SIGN DOCKER IMAGE
         ---------------------------------------------------------------------- */
         stage("Sign Docker Image") {
             steps {
@@ -121,7 +138,7 @@ pipeline {
         }
 
         /* ----------------------------------------------------------------------
-                                CREATE DOCKER NETWORK
+                                   CREATE NETWORK
         ---------------------------------------------------------------------- */
         stage("Create Network") {
             steps {
@@ -136,14 +153,15 @@ pipeline {
         }
 
         /* ----------------------------------------------------------------------
-                                RUN APP CONTAINER
+                                   RUN APP CONTAINER
         ---------------------------------------------------------------------- */
         stage("Run App Container") {
             steps {
                 script {
                     if (isUnix()) {
                         sh '''
-                            docker run -d --rm --network network1 --name demo_app_running -p 8123:80 $IMAGE
+                            docker run -d --rm --network network1 \
+                                --name demo_app_running -p 8123:80 $IMAGE
                             sleep 8
                         '''
                     } else {
@@ -157,7 +175,7 @@ pipeline {
         }
 
         /* ----------------------------------------------------------------------
-                                OWASP ZAP SCAN
+                                   OWASP ZAP SCAN
         ---------------------------------------------------------------------- */
         stage("OWASP ZAP Scan") {
             steps {
@@ -175,7 +193,8 @@ pipeline {
                                 ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
                                     -t http://demo_app_running:80 \
                                     -r zap_full_report.html \
-                                    -J zap_full_report.json -a || true
+                                    -J zap_full_report.json \
+                                    -a || true
                         '''
                     } else {
                         bat '''
@@ -195,12 +214,11 @@ pipeline {
     }
 
     /* ----------------------------------------------------------------------
-                             POST CLEANUP + REPORT PUBLISH  
+                          POST — CLEANUP + REPORT UPLOAD
     ---------------------------------------------------------------------- */
     post {
         always {
             script {
-                // Stop container safely
                 if (isUnix()) {
                     sh 'docker stop demo_app_running >/dev/null 2>&1 || true'
                     sh 'docker network rm network1 >/dev/null 2>&1 || true'
@@ -210,7 +228,6 @@ pipeline {
                 }
             }
 
-            // Publish Security Reports
             publishHTML([
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
