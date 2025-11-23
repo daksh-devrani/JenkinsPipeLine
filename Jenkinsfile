@@ -29,11 +29,12 @@ pipeline {
         }
 
         /* -------------------------------------------
-         TRIVY AUTO-INSTALL + SCAN
+         TRIVY AUTO-INSTALL + SCAN (WINDOWS)
          ------------------------------------------- */
         stage("Trivy Scan") {
             steps {
                 script {
+
                     if (!isUnix()) {
 
                         /* -------- INSTALL TRIVY ON WINDOWS -------- */
@@ -42,7 +43,7 @@ pipeline {
                             if not exist C:\\Tools mkdir C:\\Tools
 
                             echo Downloading Trivy...
-                            powershell -command "Invoke-WebRequest -Uri 'https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.51.4_windows-64bit.zip' -OutFile 'C:\\Tools\\trivy.zip'"
+                            powershell -command "Invoke-WebRequest -Uri 'https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.51.4_windows-amd64.zip' -OutFile 'C:\\Tools\\trivy.zip'"
 
                             echo Extracting Trivy...
                             powershell -command "Expand-Archive 'C:\\Tools\\trivy.zip' -DestinationPath 'C:\\Tools\\Trivy' -Force"
@@ -65,6 +66,7 @@ pipeline {
                         sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
                         sh 'trivy image --format template --template "@tplFormat/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
                     }
+
                 }
             }
         }
@@ -76,7 +78,7 @@ pipeline {
             steps {
                 script {
 
-                    /* -------- INSTALL SNYK -------- */
+                    /* -------- INSTALL SNYK CLI -------- */
                     bat """
                         echo Checking Tools directory...
                         if not exist C:\\Tools mkdir C:\\Tools
