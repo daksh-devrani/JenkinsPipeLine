@@ -7,10 +7,9 @@ pipeline {
     agent any
 
     environment {
+        // Path to Grype if installed in a custom location on the Windows agent
         GRYPE_PATH = "C:\\Program Files\\Grype"
         PATH = "${GRYPE_PATH};C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
-       }
-
     }
 
     stages {
@@ -110,17 +109,27 @@ pipeline {
                 script {
                     echo "Running Grype vulnerability scan on Docker image..."
 
+                    // ensure reports folder exists
                     bat "if not exist reports mkdir reports"
-                    
-                    bat """
-                        grype sreyassharma/signed_images_jenkins:1.0.1 ^
-                        -o json > reports\\grype_report.json || exit 0
-                    """
 
-                    bat """
-                        grype sreyassharma/signed_images_jenkins:1.0.1 ^
-                        -o table > reports\\grype_report.txt || exit 0
-                    """
+                    // Quick check: ensure grype is available on agent PATH
+                    def grypeStatus = bat(returnStatus: true, script: 'where grype')
+                    if (grypeStatus != 0) {
+                        echo "WARNING: Grype not found on PATH. Make sure Grype is installed on the Jenkins agent."
+                    }
+
+                    // Run grype producing JSON and table outputs using full paths to avoid redirection quirks
+                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o json > \"%cd%\\reports\\grype_report.json\" || exit 0"
+                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o table > \"%cd%\\reports\\grype_report.txt\" || exit 0"
+
+                    // Basic automated check: mark build UNSTABLE if HIGH/CRITICAL strings are present in JSON
+                    def foundHigh = bat(returnStatus: true, script: '%COMSPEC% /C findstr /I "CRITICAL HIGH" "%cd%\\reports\\grype_report.json"')
+                    if (foundHigh == 0) {
+                        echo "Grype found HIGH or CRITICAL vulnerabilities. Marking build UNSTABLE."
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "No HIGH/CRITICAL vulnerabilities discovered by simple string check."
+                    }
                 }
             }
 
@@ -141,7 +150,6 @@ pipeline {
                 }
             }
         }
-  
 
         stage("Push Docker Image") {
             steps {
