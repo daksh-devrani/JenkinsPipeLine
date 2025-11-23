@@ -7,15 +7,13 @@ pipeline {
     agent any
 
     environment {
-        // FIXED PATHS FOR TRIVY AND SNYK (WINDOWS)
+        
         PATH = "C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
     }
 
     stages {
 
-        /* -------------------------------------------
-           BUILD DOCKER IMAGE
-        ------------------------------------------- */
+      
         stage("Build Docker Image") {
             steps {
                 script {
@@ -24,9 +22,6 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           CLEANUP DOCKER
-        ------------------------------------------- */
         stage("Cleanup Docker") {
             steps {
                 script {
@@ -35,9 +30,7 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           TRIVY SCAN
-        ------------------------------------------- */
+       
         stage("Trivy Scan") {
             steps {
                 script {
@@ -64,9 +57,7 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           SNYK SAST + CONTAINER SCAN
-        ------------------------------------------- */
+      
         stage("Snyk SAST Scan") {
             steps {
                 script {
@@ -115,9 +106,6 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           PUSH DOCKER IMAGE
-        ------------------------------------------- */
         stage("Push Docker Image") {
             steps {
                 script {
@@ -129,9 +117,7 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           COSIGN SIGNING
-        ------------------------------------------- */
+  
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -149,9 +135,7 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           CREATE NETWORK
-        ------------------------------------------- */
+      
         stage("Create Network") {
             steps {
                 script {
@@ -160,9 +144,7 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           RUN APP CONTAINER
-        ------------------------------------------- */
+       
         stage("Run App Container") {
             steps {
                 script {
@@ -178,9 +160,7 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------
-           OWASP ZAP SCAN
-        ------------------------------------------- */
+    
         stage("OWASP ZAP Scan") {
             steps {
                 script {
@@ -199,9 +179,7 @@ pipeline {
         }
     }
 
-    /* -------------------------------------------
-       POST BUILD ACTIONS
-    ------------------------------------------- */
+   
     post {
         always {
             script {
