@@ -57,7 +57,8 @@ pipeline {
                 script {
                     bat "if not exist reports mkdir reports"
 
-                    withCredentials([string(credentialsId: 'SynkToken', variable: 'SNYK_TOKEN')]) {
+                    // FIXED: SynkToken -> SnykToken
+                    withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
                         echo "Authenticating Snyk CLI..."
                         bat """ snyk auth %SNYK_TOKEN% """
