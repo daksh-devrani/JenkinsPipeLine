@@ -47,6 +47,59 @@ pipeline {
             }
         }
 
+		stage('Snyk SAST Scan') {
+            steps {
+		        script {
+		            // Ensure reports directory exists
+		            bat "if not exist reports mkdir reports"
+		
+		            withCredentials([string(credentialsId: 'SynkToken', variable: 'SNYK_TOKEN')]) {
+		
+		                echo "Authenticating Snyk CLI..."
+		                bat """
+		                    snyk auth %SNYK_TOKEN%
+		                """
+		
+		                echo "Running Snyk Source Code Scan (SAST)..."
+		                bat """
+		                    snyk test --json > reports\\snyk_source_report.json || exit 0
+		                """
+		
+		                echo "Running Snyk Container Scan..."
+		                bat """
+		                    snyk container test demo_app_try:latest --json > reports\\snyk_container_report.json || exit 0
+		                """
+		
+		                echo "Converting Snyk reports to HTML..."
+		                bat """
+		                    npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0
+		                    npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0
+		                """
+		            }
+		        }
+		    }
+		    post {
+		        always {
+		            archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
+		
+		            publishHTML ([
+		                reportDir: 'reports',
+		                reportFiles: 'snyk_source_report.html',
+		                reportName: 'Snyk Source Code (SAST) Report',
+		                keepAll: true,
+		                alwaysLinkToLastBuild: true
+		            ])
+		
+		            publishHTML ([
+		                reportDir: 'reports',
+		                reportFiles: 'snyk_container_report.html',
+		                reportName: 'Snyk Container Vulnerability Report',
+		                keepAll: true,
+		                alwaysLinkToLastBuild: true
+		            ])
+		        }
+		    }
+		}
         stage("Push Docker Image") {
             steps {
                 script {
