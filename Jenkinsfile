@@ -29,45 +29,77 @@ pipeline {
         }
 
         /* -------------------------------------------
-         TRIVY SCAN
+         TRIVY AUTO-INSTALL + SCAN
          ------------------------------------------- */
         stage("Trivy Scan") {
             steps {
                 script {
-                    if (isUnix()) {
+                    if (!isUnix()) {
+
+                        /* -------- INSTALL TRIVY ON WINDOWS -------- */
+                        bat """
+                            echo Checking Tools directory...
+                            if not exist C:\\Tools mkdir C:\\Tools
+
+                            echo Downloading Trivy...
+                            powershell -command "Invoke-WebRequest -Uri 'https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.51.4_windows-64bit.zip' -OutFile 'C:\\Tools\\trivy.zip'"
+
+                            echo Extracting Trivy...
+                            powershell -command "Expand-Archive 'C:\\Tools\\trivy.zip' -DestinationPath 'C:\\Tools\\Trivy' -Force"
+
+                            echo Adding Trivy to PATH...
+                            set PATH=C:\\Tools\\Trivy;%PATH%
+                        """
+
+                        bat 'rmdir /S /Q reports || echo No reports dir'
+                        bat 'mkdir reports'
+
+                        /* -------- USE TRIVY -------- */
+                        bat 'C:\\Tools\\Trivy\\trivy.exe image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
+                        bat 'C:\\Tools\\Trivy\\trivy.exe image --format template --template "@tplFormat\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
+
+                    } else {
+                        /* Linux path (unchanged) */
                         sh 'rm -rf reports'
                         sh 'mkdir -p reports'
                         sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
                         sh 'trivy image --format template --template "@tplFormat/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
-                    } else {
-                        bat 'rmdir /S /Q reports || echo No reports dir'
-                        bat 'mkdir reports'
-                        bat 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
-                        bat 'trivy image --format template --template "@tplFormat\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
                     }
                 }
             }
         }
 
         /* -------------------------------------------
-         SNYK SAST & CONTAINER SCAN  (WINDOWS)
+         SNYK AUTO-INSTALL + SAST + CONTAINER SCAN
          ------------------------------------------- */
         stage('Snyk SAST Scan') {
             steps {
                 script {
+
+                    /* -------- INSTALL SNYK -------- */
+                    bat """
+                        echo Checking Tools directory...
+                        if not exist C:\\Tools mkdir C:\\Tools
+
+                        echo Downloading Snyk CLI...
+                        powershell -command "Invoke-WebRequest -Uri 'https://static.snyk.io/cli/latest/snyk-win.exe' -OutFile 'C:\\Tools\\snyk.exe'"
+
+                        echo Adding Snyk to PATH...
+                        set PATH=C:\\Tools;%PATH%
+                    """
+
                     bat "if not exist reports mkdir reports"
 
-                    // FIXED: SynkToken -> SnykToken
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
                         echo "Authenticating Snyk CLI..."
-                        bat """ snyk auth %SNYK_TOKEN% """
+                        bat """ C:\\Tools\\snyk.exe auth %SNYK_TOKEN% """
 
                         echo "Running Snyk Source Code Scan (SAST)..."
-                        bat """ snyk code test --json > reports\\snyk_source_report.json || exit 0 """
+                        bat """ C:\\Tools\\snyk.exe code test --json > reports\\snyk_source_report.json || exit 0 """
 
                         echo "Running Snyk Container Scan..."
-                        bat """ snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0 """
+                        bat """ C:\\Tools\\snyk.exe container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0 """
 
                         echo "Converting Snyk reports to HTML..."
                         bat """
@@ -201,7 +233,6 @@ pipeline {
             steps {
                 script {
                     if (isUnix()) {
-                        sh 'chmod -R 777 reports'
                         sh '''
                             docker run --rm \
                             --network network1 \
@@ -235,13 +266,8 @@ pipeline {
     post {
         always {
             script {
-                if (isUnix()) {
-                    runCmd 'docker stop demo_app_running || true'
-                    runCmd 'docker network rm network1 || true'
-                } else {
-                    runCmd 'docker stop demo_app_running || exit /b 0'
-                    runCmd 'docker network rm network1 || exit /b 0'
-                }
+                runCmd 'docker stop demo_app_running || exit /b 0'
+                runCmd 'docker network rm network1 || exit /b 0'
             }
 
             publishHTML([
