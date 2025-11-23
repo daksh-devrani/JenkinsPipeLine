@@ -9,7 +9,7 @@ pipeline {
     environment {
         GRYPE_PATH = "C:\\Program Files\\Grype"
         PATH = "${GRYPE_PATH};C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
-}
+       }
 
     }
 
