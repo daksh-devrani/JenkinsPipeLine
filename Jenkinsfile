@@ -7,13 +7,11 @@ pipeline {
     agent any
 
     environment {
-        
-        PATH = "C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
+        PATH = "C:\\Trivy;C:\\Program Files\\Snyk;${env.PATH}"
     }
 
     stages {
 
-      
         stage("Build Docker Image") {
             steps {
                 script {
@@ -30,7 +28,6 @@ pipeline {
             }
         }
 
-       
         stage("Trivy Scan") {
             steps {
                 script {
@@ -57,7 +54,6 @@ pipeline {
             }
         }
 
-      
         stage("Snyk SAST Scan") {
             steps {
                 script {
@@ -106,6 +102,44 @@ pipeline {
             }
         }
 
+        stage("Grype Scan") {
+            steps {
+                script {
+                    echo "Running Grype vulnerability scan on Docker image..."
+
+                    bat "if not exist reports mkdir reports"
+                    
+                    bat """
+                        grype sreyassharma/signed_images_jenkins:1.0.1 ^
+                        -o json > reports\\grype_report.json || exit 0
+                    """
+
+                    bat """
+                        grype sreyassharma/signed_images_jenkins:1.0.1 ^
+                        -o table > reports\\grype_report.txt || exit 0
+                    """
+                }
+            }
+
+            post {
+                always {
+                    echo "Publishing Grype Reports..."
+
+                    archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
+
+                    publishHTML([
+                        allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        reportDir: 'reports',
+                        reportFiles: 'grype_report.txt',
+                        reportName: 'Grype Vulnerability Report'
+                    ])
+                }
+            }
+        }
+  
+
         stage("Push Docker Image") {
             steps {
                 script {
@@ -117,7 +151,6 @@ pipeline {
             }
         }
 
-  
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -135,7 +168,6 @@ pipeline {
             }
         }
 
-      
         stage("Create Network") {
             steps {
                 script {
@@ -144,7 +176,6 @@ pipeline {
             }
         }
 
-       
         stage("Run App Container") {
             steps {
                 script {
@@ -160,7 +191,6 @@ pipeline {
             }
         }
 
-    
         stage("OWASP ZAP Scan") {
             steps {
                 script {
@@ -179,7 +209,6 @@ pipeline {
         }
     }
 
-   
     post {
         always {
             script {
