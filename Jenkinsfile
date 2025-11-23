@@ -1,117 +1,70 @@
-/*
-    FINAL OPTIMIZED DEVSECOPS JENKINSFILE
-    ✔ Cross-platform: Windows + Linux
-    ✔ Docker Build
-    ✔ Trivy Scan
-    ✔ Push Docker Image
-    ✔ Cosign Signing
-    ✔ OWASP ZAP Scan
-    ✔ HTML Reports
-*/
-
 def runCmd(cmd) {
     if (isUnix()) {
-        sh "${cmd}"
+        sh(script: cmd)
     } else {
-        bat "${cmd}"
+        bat(script: cmd)
     }
 }
 
 pipeline {
     agent any
 
-    environment {
-        IMAGE = "sreyassharma/signed_images_jenkins:1.0.1"
-        REPORT_DIR = "reports"
-    }
-
     stages {
-
-        /* ----------------------------------------------------------------------
-                                   BUILD DOCKER IMAGE
-        ---------------------------------------------------------------------- */
         stage("Build Docker Image") {
             steps {
                 script {
-                    runCmd("docker build -t ${IMAGE} .")
+                    runCmd 'docker build -t sreyassharma/signed_images_jenkins:1.0.1 .'
                 }
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   CLEANUP DOCKER
-        ---------------------------------------------------------------------- */
         stage("Cleanup Docker") {
             steps {
                 script {
-                    runCmd("docker image prune -f")
+                    runCmd 'docker image prune -f'
                 }
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   TRIVY SCAN
-        ---------------------------------------------------------------------- */
         stage("Trivy Scan") {
             steps {
                 script {
+                    // Ensure reports directory exists
                     if (isUnix()) {
-                        sh '''
-                            rm -rf reports
-                            mkdir -p reports
-
-                            trivy image --format json -o reports/trivy_report.json \
-                                --severity MEDIUM,HIGH,CRITICAL $IMAGE || true
-
-                            trivy image --format template --template "@/tplFormat/html.tpl" \
-                                -o reports/trivy_report.html \
-                                --severity MEDIUM,HIGH,CRITICAL $IMAGE || true
-                        '''
+                        sh 'rm -rf reports'
+                        sh 'mkdir -p reports'
+                        // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
+                        sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
+                        sh 'trivy image --format template --template "@tplFormat/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
                     } else {
-                        bat '''
-                            if exist reports ( rmdir /S /Q reports ) else ( echo No reports dir )
-                            mkdir reports
-
-                            trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL %IMAGE% || exit /b 0
-                            trivy image --format template --template "@tplFormat\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL %IMAGE% || exit /b 0
-                        '''
+                        bat 'rmdir /S /Q reports || echo No reports dir'
+                        bat 'mkdir reports'
+                        // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
+                        bat 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
+                        bat 'trivy image --format template --template "@tplFormat\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
                     }
                 }
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   PUSH DOCKER IMAGE
-        ---------------------------------------------------------------------- */
         stage("Push Docker Image") {
             steps {
                 script {
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'Docker',
-                            usernameVariable: 'DOCKER_USER',
-                            passwordVariable: 'DOCKER_PASS'
-                        )
-                    ]) {
+                    withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         if (isUnix()) {
-                            sh """
-                                echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                                docker push ${IMAGE}
-                            """
+                            sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                            sh 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                         } else {
-                            bat """
-                                echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
-                                docker push ${IMAGE}
-                            """
+                            bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                            bat 'docker push sreyassharma/signed_images_jenkins:1.0.1'
                         }
                     }
                 }
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   SIGN DOCKER IMAGE
-        ---------------------------------------------------------------------- */
+
+        // i can use digest but is bit complex
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -121,14 +74,18 @@ pipeline {
                     ]) {
                         if (isUnix()) {
                             sh '''
-                                echo "$COSIGN_KEY" > cosign.key
-                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/$IMAGE
+                                cat > cosign.key <<EOF
+                                    $COSIGN_KEY
+                                    EOF
+
+                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
+
                                 rm cosign.key
                             '''
                         } else {
                             bat '''
                                 echo %COSIGN_KEY% > cosign.key
-                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/%IMAGE%
+                                cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
                                 del cosign.key
                             '''
                         }
@@ -137,9 +94,7 @@ pipeline {
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   CREATE NETWORK
-        ---------------------------------------------------------------------- */
+
         stage("Create Network") {
             steps {
                 script {
@@ -152,21 +107,25 @@ pipeline {
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   RUN APP CONTAINER
-        ---------------------------------------------------------------------- */
         stage("Run App Container") {
             steps {
                 script {
                     if (isUnix()) {
                         sh '''
-                            docker run -d --rm --network network1 \
-                                --name demo_app_running -p 8123:80 $IMAGE
-                            sleep 8
+                            docker run -d --rm \
+                                --network network1 \
+                                --name demo_app_running \
+                                -p 8123:80 \
+                                sreyassharma/signed_images_jenkins:1.0.1
                         '''
+                        sh 'sleep 8'
                     } else {
                         bat '''
-                            docker run -d --rm --network network1 --name demo_app_running -p 8123:80 %IMAGE%
+                            docker run -d --rm ^
+                                --network network1 ^
+                                --name demo_app_running ^
+                                -p 8123:80 ^
+                                sreyassharma/signed_images_jenkins:1.0.1
                         '''
                         bat 'ping -n 9 127.0.0.1 >nul'
                     }
@@ -174,68 +133,91 @@ pipeline {
             }
         }
 
-        /* ----------------------------------------------------------------------
-                                   OWASP ZAP SCAN
-        ---------------------------------------------------------------------- */
         stage("OWASP ZAP Scan") {
-            steps {
-                script {
-                    if (isUnix()) {
-                        sh '''
-                            chmod -R 777 reports
-
-                            docker run --rm --network network1 \
-                                -v $(pwd)/reports:/zap/wrk/ \
-                                ghcr.io/zaproxy/zaproxy:stable zap.sh -cmd -addonupdate
-
-                            docker run --rm --network network1 \
-                                -v $(pwd)/reports:/zap/wrk/ \
-                                ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
-                                    -t http://demo_app_running:80 \
-                                    -r zap_full_report.html \
-                                    -J zap_full_report.json \
-                                    -a || true
-                        '''
-                    } else {
-                        bat '''
-                            docker run --rm --network network1 -v %cd%\\reports:/zap/wrk/ ghcr.io/zaproxy/zaproxy:stable zap.sh -cmd -addonupdate
-
-                            docker run --rm --network network1 -v %cd%\\reports:/zap/wrk/ ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
-                                -t http://demo_app_running:80 ^
-                                -r zap_full_report.html ^
-                                -J zap_full_report.json ^
-                                -a || exit /b 0
-                        '''
-                    }
-                }
-            }
-        }
-
+		    steps {
+		        script {
+		            if (isUnix()) {
+		                sh 'chmod -R 777 reports'
+		
+		                sh '''
+		                    docker run --rm \
+		                    --network network1 \
+		                    -v $(pwd)/reports:/zap/wrk/ \
+		                    ghcr.io/zaproxy/zaproxy:stable zap.sh -cmd \
+		                        -addonupdate \
+		                        -addoninstall ascanrulesAlpha \
+		                        -addoninstall ascanrulesBeta \
+		                        -addoninstall pscanrulesAlpha \
+		                        -addoninstall pscanrulesBeta \
+		                        -addoninstall retire \
+		                        -addoninstall fuzzer \
+		                        -addoninstall openapi \
+		                        -addoninstall graphql \
+		                        -addoninstall log4shell
+		
+		                    docker run --rm \
+		                    --network network1 \
+		                    -v $(pwd)/reports:/zap/wrk/ \
+		                    ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+		                        -t http://demo_app_running:80 \
+		                        -r zap_full_report.html \
+		                        -J zap_full_report.json \
+		                        -a || true
+		                '''
+		            } else {
+		                bat '''
+		                    docker run --rm ^
+		                    --network network1 ^
+		                    -v %cd%\\reports:/zap/wrk/ ^
+		                    ghcr.io/zaproxy/zaproxy:stable zap.sh -cmd^
+		                        -addonupdate ^
+		                        -addoninstall ascanrulesAlpha ^
+		                        -addoninstall ascanrulesBeta ^
+		                        -addoninstall pscanrulesAlpha ^
+		                        -addoninstall pscanrulesBeta ^
+		                        -addoninstall retire ^
+		                        -addoninstall fuzzer ^
+		                        -addoninstall openapi ^
+		                        -addoninstall graphql ^
+		                        -addoninstall log4shell
+		
+		                    docker run --rm ^
+		                    --network network1 ^
+		                    -v %cd%\\reports:/zap/wrk/ ^
+		                    ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
+		                        -t http://demo_app_running:80 ^
+		                        -r zap_full_report.html ^
+		                        -J zap_full_report.json ^
+		                        -a || exit /b 0
+		                '''
+		            }
+		        }
+		    }
+		}
     }
 
-    /* ----------------------------------------------------------------------
-                          POST — CLEANUP + REPORT UPLOAD
-    ---------------------------------------------------------------------- */
     post {
         always {
             script {
                 if (isUnix()) {
-                    sh 'docker stop demo_app_running >/dev/null 2>&1 || true'
-                    sh 'docker network rm network1 >/dev/null 2>&1 || true'
+                    runCmd 'docker stop demo_app_running || true'
+                    runCmd 'docker network rm network1 || true'
                 } else {
-                    bat 'docker stop demo_app_running 2>nul || exit /b 0'
-                    bat 'docker network rm network1 2>nul || exit /b 0'
+                    runCmd 'docker stop demo_app_running || exit /b 0'
+                    runCmd 'docker network rm network1 || exit /b 0'
                 }
             }
 
-            publishHTML([
-                allowMissing: true,
+            // publishHTML can stay the same
+             publishHTML([
+		        allowMissing: true,               // don't fail build if report missing
                 alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: "${REPORT_DIR}",
-                reportFiles: "trivy_report.html,zap_full_report.html",
-                reportName: "Security Reports"
-            ])
+                keepAll: true,                    // keep reports for all builds
+
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html,zap_full_report.html',
+                reportName: 'Security Reports'
+             ])
         }
     }
 }
