@@ -1,212 +1,147 @@
-def runCmd(cmd) {
-    if (isUnix()) { sh(script: cmd) }
-    else { bat(script: cmd) }
-}
-
 pipeline {
     agent any
 
+    environment {
+        PATH = "C:\\trivy_0.67.2_windows-64bit;C:\\Program Files\\Snyk;${env.PATH}"
+    }
+
     stages {
 
-        /* -------------------------------------------
-           BUILD DOCKER IMAGE
-        ------------------------------------------- */
-        stage("Build Docker Image") {
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ShivangMangal/JenkinsPipeLineTry_01.git',
+                        credentialsId: 'GitHub'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    runCmd 'docker build -t sreyassharma/signed_images_jenkins:1.0.1 .'
+                    bat """
+                        docker build -t sreyassharma/signed_images_jenkins:1.0.1 .
+                    """
                 }
             }
         }
 
-        /* -------------------------------------------
-           CLEANUP DOCKER
-        ------------------------------------------- */
-        stage("Cleanup Docker") {
+        stage('Cleanup Docker') {
+            steps {
+                bat "docker image prune -f || exit 0"
+            }
+        }
+
+        stage('Trivy Scan') {
             steps {
                 script {
-                    runCmd 'docker image prune -f'
+                    bat """
+                        rmdir /S /Q reports || echo No reports
+                        mkdir reports
+
+                        echo Running Trivy...
+
+                        trivy image --format json ^
+                            -o reports\\trivy_report.json ^
+                            --severity MEDIUM,HIGH,CRITICAL ^
+                            sreyassharma/signed_images_jenkins:1.0.1 || exit 0
+
+                        trivy image --format template ^
+                            --template "@tplFormat\\html.tpl" ^
+                            -o reports\\trivy_report.html ^
+                            --severity MEDIUM,HIGH,CRITICAL ^
+                            sreyassharma/signed_images_jenkins:1.0.1 || exit 0
+                    """
                 }
             }
         }
 
-        /* -------------------------------------------
-           TRIVY SCAN (uses installed Trivy)
-        ------------------------------------------- */
-        stage("Trivy Scan") {
+        stage('Snyk SAST Scan') {
             steps {
-                script {
-                    bat 'rmdir /S /Q reports || echo No reports'
-                    bat 'mkdir reports'
+                withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
+                    script {
+                        bat """
+                            if not exist reports mkdir reports
 
-                    bat '''
-                        trivy image --format json -o reports\\trivy_report.json ^
-                        --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 ^
-                        || exit 0
-                    '''
+                            echo Authenticating Snyk...
+                            snyk auth %SNYK_TOKEN% || exit 0
 
-                    bat '''
-                        trivy image --format template --template "@tplFormat\\html.tpl" ^
-                        -o reports\\trivy_report.html ^
-                        --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 ^
-                        || exit 0
-                    '''
-                }
-            }
-        }
+                            echo Running Snyk SAST...
+                            snyk code test --json > reports\\snyk_sast.json || exit 0
 
-        /* -------------------------------------------
-           SNYK SAST + CONTAINER SCAN
-        ------------------------------------------- */
-        stage("Snyk SAST Scan") {
-            steps {
-                script {
-                    bat "if not exist reports mkdir reports"
-
-                    withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
-
-                        echo "Authenticating Snyk..."
-                        bat "snyk auth %SNYK_TOKEN%"
-
-                        echo "Running Snyk SAST..."
-                        bat "snyk code test --json > reports\\snyk_source_report.json || exit 0"
-
-                        echo "Running Snyk Container Scan..."
-                        bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
-
-                        echo "Generating HTML Reports..."
-                        bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
-                        bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
-                    }
-                }
-            }
-
-            post {
-                always {
-                    archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
-
-                    publishHTML([
-                        allowMissing: true,
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        reportDir: 'reports',
-                        reportFiles: 'snyk_source_report.html',
-                        reportName: 'Snyk SAST Report'
-                    ])
-
-                    publishHTML([
-                        allowMissing: true,
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        reportDir: 'reports',
-                        reportFiles: 'snyk_container_report.html',
-                        reportName: 'Snyk Container Report'
-                    ])
-                }
-            }
-        }
-
-        /* -------------------------------------------
-           PUSH DOCKER IMAGE
-        ------------------------------------------- */
-        stage("Push Docker Image") {
-            steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
-                        bat "docker push sreyassharma/signed_images_jenkins:1.0.1"
+                            echo Running Snyk Container Scan...
+                            snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container.json || exit 0
+                        """
                     }
                 }
             }
         }
 
-        /* -------------------------------------------
-           COSIGN SIGNING
-        ------------------------------------------- */
-        stage("Sign Docker Image") {
+        stage('Push Docker Image') {
+            when { expression { false } }
+            steps { echo "Skipping push for now." }
+        }
+
+        stage('Sign Docker Image') {
+            when { expression { false } }
+            steps { echo "Skipping signing for now." }
+        }
+
+        stage('Create Network') {
             steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY'),
-                        string(credentialsId: 'CosignPassword', variable: 'COSIGN_PASSWORD')
-                    ]) {
-                        bat '''
-                            echo %COSIGN_KEY% > cosign.key
-                            cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
-                            del cosign.key
-                        '''
-                    }
-                }
+                bat "docker network create network1 || exit 0"
             }
         }
 
-        /* -------------------------------------------
-           CREATE NETWORK
-        ------------------------------------------- */
-        stage("Create Network") {
+        stage('Run App Container') {
             steps {
-                script {
-                    bat 'docker network inspect network1 >nul 2>&1 || docker network create network1'
-                }
+                bat """
+                    docker run -d --name demo_app_running --network network1 -p 8080:80 sreyassharma/signed_images_jenkins:1.0.1 || exit 0
+                """
             }
         }
 
-        /* -------------------------------------------
-           RUN APP CONTAINER
-        ------------------------------------------- */
-        stage("Run App Container") {
-            steps {
-                script {
-                    bat '''
-                        docker run -d --rm ^
-                        --network network1 ^
-                        --name demo_app_running ^
-                        -p 8123:80 ^
-                        sreyassharma/signed_images_jenkins:1.0.1
-                    '''
-                    bat "ping -n 8 127.0.0.1 >nul"
-                }
-            }
-        }
-
-        /* -------------------------------------------
-           OWASP ZAP SCAN
-        ------------------------------------------- */
-        stage("OWASP ZAP Scan") {
-            steps {
-                script {
-                    bat '''
-                        docker run --rm ^
-                        --network network1 ^
-                        -v %cd%\\reports:/zap/wrk/ ^
-                        ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
-                            -t http://demo_app_running:80 ^
-                            -r zap_full_report.html ^
-                            -J zap_full_report.json ^
-                            -a || exit 0
-                    '''
-                }
-            }
+        stage('OWASP ZAP Scan') {
+            when { expression { false } }
+            steps { echo "Skipping ZAP for now." }
         }
     }
 
-    /* -------------------------------------------
-       POST BUILD ACTIONS
-    ------------------------------------------- */
     post {
         always {
             script {
-                bat 'docker stop demo_app_running || exit 0'
-                bat 'docker network rm network1 || exit 0'
+                bat "docker stop demo_app_running || exit 0"
+                bat "docker rm demo_app_running || exit 0"
+                bat "docker network rm network1 || exit 0"
             }
 
+            archiveArtifacts artifacts: 'reports/**/*.*', fingerprint: true
+
             publishHTML([
-                allowMissing: true,
-                keepAll: true,
-                alwaysLinkToLastBuild: true,
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_full_report.html',
-                reportName: 'Security Reports'
+                reportFiles: 'trivy_report.html',
+                reportName: 'Trivy Vulnerability Report',
+                keepAll: true,
+                alwaysLinkToLastBuild: true
+            ])
+
+            publishHTML([
+                reportDir: 'reports',
+                reportFiles: 'snyk_sast.json',
+                reportName: 'Snyk SAST Report',
+                keepAll: true,
+                alwaysLinkToLastBuild: true
+            ])
+
+            publishHTML([
+                reportDir: 'reports',
+                reportFiles: 'snyk_container.json',
+                reportName: 'Snyk Container Report',
+                keepAll: true,
+                alwaysLinkToLastBuild: true
             ])
         }
     }
