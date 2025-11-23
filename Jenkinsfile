@@ -31,12 +31,12 @@ pipeline {
         }
 
         /* -------------------------------------------
-           TRIVY SCAN (uses system-installed Trivy)
+           TRIVY SCAN (uses installed Trivy)
         ------------------------------------------- */
         stage("Trivy Scan") {
             steps {
                 script {
-                    bat 'rmdir /S /Q reports || echo No reports folder'
+                    bat 'rmdir /S /Q reports || echo No reports'
                     bat 'mkdir reports'
 
                     bat '''
@@ -57,7 +57,6 @@ pipeline {
 
         /* -------------------------------------------
            SNYK SAST + CONTAINER SCAN
-           (uses system-installed Snyk)
         ------------------------------------------- */
         stage("Snyk SAST Scan") {
             steps {
@@ -69,13 +68,13 @@ pipeline {
                         echo "Authenticating Snyk..."
                         bat "snyk auth %SNYK_TOKEN%"
 
-                        echo "Running Snyk Source Code Scan (SAST)..."
+                        echo "Running Snyk SAST..."
                         bat "snyk code test --json > reports\\snyk_source_report.json || exit 0"
 
-                        echo 'Running Snyk Container Scan...'
+                        echo "Running Snyk Container Scan..."
                         bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
 
-                        echo "Generating Snyk HTML Reports..."
+                        echo "Generating HTML Reports..."
                         bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
                         bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
                     }
@@ -88,6 +87,8 @@ pipeline {
 
                     publishHTML([
                         allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_source_report.html',
                         reportName: 'Snyk SAST Report'
@@ -95,9 +96,11 @@ pipeline {
 
                     publishHTML([
                         allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_container_report.html',
-                        reportName: 'Snyk Container Scan Report'
+                        reportName: 'Snyk Container Report'
                     ])
                 }
             }
@@ -118,7 +121,7 @@ pipeline {
         }
 
         /* -------------------------------------------
-           SIGN DOCKER IMAGE WITH COSIGN
+           COSIGN SIGNING
         ------------------------------------------- */
         stage("Sign Docker Image") {
             steps {
@@ -177,10 +180,10 @@ pipeline {
                         --network network1 ^
                         -v %cd%\\reports:/zap/wrk/ ^
                         ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
-                        -t http://demo_app_running:80 ^
-                        -r zap_full_report.html ^
-                        -J zap_full_report.json ^
-                        -a || exit 0
+                            -t http://demo_app_running:80 ^
+                            -r zap_full_report.html ^
+                            -J zap_full_report.json ^
+                            -a || exit 0
                     '''
                 }
             }
@@ -195,14 +198,16 @@ pipeline {
             script {
                 bat 'docker stop demo_app_running || exit 0'
                 bat 'docker network rm network1 || exit 0'
-
-                publishHTML([
-                    allowMissing: true,
-                    reportDir: 'reports',
-                    reportFiles: 'trivy_report.html,zap_full_report.html',
-                    reportName: 'Security Reports'
-                ])
             }
+
+            publishHTML([
+                allowMissing: true,
+                keepAll: true,
+                alwaysLinkToLastBuild: true,
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html,zap_full_report.html',
+                reportName: 'Security Reports'
+            ])
         }
     }
 }
