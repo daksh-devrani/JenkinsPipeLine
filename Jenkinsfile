@@ -7,8 +7,11 @@ pipeline {
     agent any
 
     environment {
-        GRYPE_PATH = "C:\\Program Files\\Grype"
-        PATH = "${GRYPE_PATH};C:\\Trivy;C:\\Program Files\\Snyk;${env.PATH}"
+        GRYPE_PATH = "C:\\grype_0.104.0_windows_amd64"
+        TRIVY_PATH = "C:\\trivy_0.67.2_windows-64bit"
+        SNYK_PATH  = "C:\\Program Files\\Snyk"
+
+        PATH = "${GRYPE_PATH};${TRIVY_PATH};${SNYK_PATH};${env.PATH}"
     }
 
     stages {
@@ -81,7 +84,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_source_report.html',
-                        reportName: 'Snyk SAST Report'
+                        reportName: 'Snyk SAST Report',
+                        reportTitles: 'Snyk SAST Scan'
                     ])
 
                     publishHTML([
@@ -90,7 +94,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_container_report.html',
-                        reportName: 'Snyk Container Report'
+                        reportName: 'Snyk Container Report',
+                        reportTitles: 'Snyk Container Scan'
                     ])
                 }
             }
@@ -131,7 +136,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'grype_report.txt',
-                        reportName: 'Grype Vulnerability Report'
+                        reportName: 'Grype Vulnerability Report',
+                        reportTitles: 'Grype Scan Output'
                     ])
                 }
             }
@@ -200,7 +206,6 @@ pipeline {
                             jasonish/suricata ^
                             suricata -i eth0 -c /etc/suricata/suricata.yaml -l /var/log/suricata/
 
-                        rem Wait for Suricata to generate logs
                         ping -n 10 127.0.0.1 >nul
 
                         if not exist reports\\suricata mkdir reports\\suricata
@@ -219,12 +224,46 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports/suricata',
                         reportFiles: 'eve.json',
-                        reportName: 'Suricata Alerts'
+                        reportName: 'Suricata Alerts',
+                        reportTitles: 'Suricata IDS Events'
                     ])
                 }
             }
         }
 
+        stage("Zeek Monitoring") {
+            steps {
+                script {
+                    bat '''
+                        docker run -d --rm ^
+                            --name zeek ^
+                            --network network1 ^
+                            zeekurity/zeek zeek -i eth0
+
+                        timeout /t 10 >nul
+
+                        if not exist reports\\zeek mkdir reports\\zeek
+                        docker cp zeek:/usr/local/zeek/logs/. reports\\zeek
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    archiveArtifacts artifacts: 'reports/zeek//*', fingerprint: true
+
+                    publishHTML([
+                        allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        reportDir: 'reports/zeek',
+                        reportFiles: 'conn.log',
+                        reportName: 'Zeek Connection Logs',
+                        reportTitles: 'Zeek Network Monitoring'
+                    ])
+                }
+            }
+        }
 
         stage("OWASP ZAP Scan") {
             steps {
@@ -257,7 +296,8 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 reportDir: 'reports',
                 reportFiles: 'trivy_report.html,zap_full_report.html',
-                reportName: 'Security Reports'
+                reportName: 'Security Reports',
+                reportTitles: 'Trivy & ZAP Reports'
             ])
         }
     }
