@@ -32,31 +32,31 @@ pipeline {
             }
         }
 
-        stage("Trivy Scan") {
+        stage('Trivy Scan') {
             steps {
                 script {
-                    bat 'rmdir /S /Q reports || echo "no reports"'
-                    bat 'mkdir reports'
-
-                    bat '''
-                        trivy image --format json ^
-                        -o reports\\trivy_report.json ^
-                        --severity MEDIUM,HIGH,CRITICAL ^
-                        sreyassharma/signed_images_jenkins:1.0.1 ^
-                        || exit 0
-                    '''
-
-                    bat '''
-                        trivy image --format template ^
-                        --template "@tplFormat\\html.tpl" ^
-                        -o reports\\trivy_report.html ^
-                        --severity MEDIUM,HIGH,CRITICAL ^
-                        sreyassharma/signed_images_jenkins:1.0.1 ^
-                        || exit 0
-                    '''
+                    bat """
+                    rmdir /S /Q reports || echo no reports
+                    mkdir reports
+                    """
+    
+                    bat """
+                    trivy image --format json ^
+                      -o reports\\trivy_report.json ^
+                      --severity MEDIUM,HIGH,CRITICAL ^
+                      ${IMAGE_NAME} || exit 0
+                    """
+                    bat """
+                    trivy image --format template ^
+                      --template "@contrib/html.tpl" ^
+                      -o reports\\trivy_report.html ^
+                      --severity MEDIUM,HIGH,CRITICAL ^
+                      ${IMAGE_NAME} || exit 0
+                    """
                 }
             }
         }
+
 
         stage("Snyk SAST Scan") {
             steps {
