@@ -7,16 +7,34 @@ pipeline {
     agent any
 
     environment {
-        FILE_SEP = isUnix() ? "/" : "\\"
-        PWD_CMD = isUnix() ? "pwd" : "cd"
         REPORT_DIR = "reports"
     }
 
     stages {
 
-        /* -----------------------------
-              Build Docker Image
-        ------------------------------*/
+        /* ---------------------------------------------------
+                     Initialize Cross-Platform Vars
+        ----------------------------------------------------*/
+        stage("Init Env Vars") {
+            steps {
+                script {
+                    env.FILE_SEP = isUnix() ? "/" : "\\"
+                    env.RM_DIR   = isUnix() ? "rm -rf" : "rmdir /S /Q"
+                    env.SLEEP8   = isUnix() ? "sleep 8" : "ping -n 8 127.0.0.1 >nul"
+                    env.PWD_PATH = isUnix() ?
+                        sh(script: "pwd", returnStdout: true).trim() :
+                        bat(script: "cd", returnStdout: true).trim()
+
+                    echo "Running on: ${isUnix() ? 'LINUX' : 'WINDOWS'}"
+                    echo "File separator: ${env.FILE_SEP}"
+                    echo "Working directory: ${env.PWD_PATH}"
+                }
+            }
+        }
+
+        /* ---------------------------------------------------
+                         Build Docker
+        ----------------------------------------------------*/
         stage("Build Docker Image") {
             steps {
                 script {
@@ -25,9 +43,9 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                Cleanup Docker
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         Cleanup Docker
+        ----------------------------------------------------*/
         stage("Cleanup Docker") {
             steps {
                 script {
@@ -36,33 +54,26 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                 TRIVY Scan
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         TRIVY Scan
+        ----------------------------------------------------*/
         stage("Trivy Scan") {
             steps {
                 script {
-                    // Remove reports folder
-                    if (isUnix())
-                        runCmd "rm -rf ${REPORT_DIR}"
-                    else
-                        runCmd "rmdir /S /Q ${REPORT_DIR} || echo no reports"
-
+                    runCmd "${env.RM_DIR} ${REPORT_DIR} || echo no reports"
                     runCmd "mkdir ${REPORT_DIR}"
 
-                    // JSON Report
                     runCmd """
                         trivy image --format json \
-                        -o ${REPORT_DIR}${FILE_SEP}trivy_report.json \
+                        -o ${REPORT_DIR}${env.FILE_SEP}trivy_report.json \
                         --severity MEDIUM,HIGH,CRITICAL \
                         sreyassharma/signed_images_jenkins:1.0.1 || exit 0
                     """
 
-                    // HTML Report
                     runCmd """
                         trivy image --format template \
                         --template @tplFormat/html.tpl \
-                        -o ${REPORT_DIR}${FILE_SEP}trivy_report.html \
+                        -o ${REPORT_DIR}${env.FILE_SEP}trivy_report.html \
                         --severity MEDIUM,HIGH,CRITICAL \
                         sreyassharma/signed_images_jenkins:1.0.1 || exit 0
                     """
@@ -70,9 +81,9 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                SNYK SAST & Container
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         SNYK SAST & Container
+        ----------------------------------------------------*/
         stage("Snyk SAST Scan") {
             steps {
                 script {
@@ -80,22 +91,17 @@ pipeline {
 
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
-                        // Authenticate
                         runCmd "snyk auth ${SNYK_TOKEN}"
 
-                        // SAST
-                        runCmd "snyk code test --json > ${REPORT_DIR}${FILE_SEP}snyk_source_report.json || exit 0"
+                        runCmd "snyk code test --json > ${REPORT_DIR}${env.FILE_SEP}snyk_source_report.json || exit 0"
 
-                        // Container
-                        runCmd "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > ${REPORT_DIR}${FILE_SEP}snyk_container_report.json || exit 0"
+                        runCmd "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > ${REPORT_DIR}${env.FILE_SEP}snyk_container_report.json || exit 0"
 
-                        // HTML Convert
-                        runCmd "npx snyk-to-html -i ${REPORT_DIR}${FILE_SEP}snyk_source_report.json -o ${REPORT_DIR}${FILE_SEP}snyk_source_report.html"
-                        runCmd "npx snyk-to-html -i ${REPORT_DIR}${FILE_SEP}snyk_container_report.json -o ${REPORT_DIR}${FILE_SEP}snyk_container_report.html"
+                        runCmd "npx snyk-to-html -i ${REPORT_DIR}${env.FILE_SEP}snyk_source_report.json -o ${REPORT_DIR}${env.FILE_SEP}snyk_source_report.html"
+                        runCmd "npx snyk-to-html -i ${REPORT_DIR}${env.FILE_SEP}snyk_container_report.json -o ${REPORT_DIR}${env.FILE_SEP}snyk_container_report.html"
                     }
                 }
             }
-
             post {
                 always {
                     archiveArtifacts artifacts: "${REPORT_DIR}/snyk_*", fingerprint: true
@@ -111,26 +117,26 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                GRYPE Scan
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         Grype Scan
+        ----------------------------------------------------*/
         stage("Grype Scan") {
             steps {
                 script {
+
                     runCmd "mkdir ${REPORT_DIR}"
 
-                    runCmd "grype sreyassharma/signed_images_jenkins:1.0.1 -o json > ${REPORT_DIR}${FILE_SEP}grype_report.json || exit 0"
-                    runCmd "grype sreyassharma/signed_images_jenkins:1.0.1 -o table > ${REPORT_DIR}${FILE_SEP}grype_report.txt || exit 0"
+                    runCmd "grype sreyassharma/signed_images_jenkins:1.0.1 -o json > ${REPORT_DIR}${env.FILE_SEP}grype_report.json || exit 0"
+                    runCmd "grype sreyassharma/signed_images_jenkins:1.0.1 -o table > ${REPORT_DIR}${env.FILE_SEP}grype_report.txt || exit 0"
 
-                    // Check HIGH/CRITICAL
-                    def checkCmd = isUnix() ?
-                        "grep -Ei 'CRITICAL|HIGH' ${REPORT_DIR}${FILE_SEP}grype_report.json" :
-                        "findstr /I \"CRITICAL HIGH\" ${REPORT_DIR}${FILE_SEP}grype_report.json"
+                    def vulnCheckCmd = isUnix() ?
+                        "grep -Ei 'CRITICAL|HIGH' ${REPORT_DIR}${env.FILE_SEP}grype_report.json" :
+                        "findstr /I \"CRITICAL HIGH\" ${REPORT_DIR}${env.FILE_SEP}grype_report.json"
 
-                    def status = runCmd(checkCmd)
+                    def status = runCmd(vulnCheckCmd)
 
                     if (status == 0) {
-                        echo "HIGH/CRITICAL vulnerabilities found → UNSTABLE"
+                        echo "HIGH / CRITICAL vulnerabilities found."
                         currentBuild.result = "UNSTABLE"
                     }
                 }
@@ -151,9 +157,9 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                Docker Push
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         Docker Push
+        ----------------------------------------------------*/
         stage("Push Docker Image") {
             steps {
                 script {
@@ -165,9 +171,9 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                Cosign Signing
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         Cosign Signing
+        ----------------------------------------------------*/
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -183,59 +189,60 @@ pipeline {
             }
         }
 
-        /* -----------------------------
-                Network Create
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         Network Create
+        ----------------------------------------------------*/
         stage("Create Network") {
             steps {
                 script {
-                    runCmd "docker network inspect network1 >/dev/null 2>&1 || docker network create network1"
+                    runCmd "docker network inspect network1 > /dev/null 2>&1 || docker network create network1"
                 }
             }
         }
 
-        /* -----------------------------
-              Run Application
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         Run App Container
+        ----------------------------------------------------*/
         stage("Run App Container") {
             steps {
                 script {
-                    runCmd "docker run -d --rm --network network1 --name demo_app_running -p 8123:80 sreyassharma/signed_images_jenkins:1.0.1"
+                    runCmd """
+                        docker run -d --rm \
+                        --network network1 \
+                        --name demo_app_running \
+                        -p 8123:80 \
+                        sreyassharma/signed_images_jenkins:1.0.1
+                    """
 
-                    // Sleep 8 seconds
-                    runCmd (isUnix() ? "sleep 8" : "ping -n 8 127.0.0.1 >nul")
+                    runCmd "${env.SLEEP8}"
                 }
             }
         }
 
-        /* -----------------------------
-                ZAP Scan
-        ------------------------------*/
+        /* ---------------------------------------------------
+                         OWASP ZAP Scan
+        ----------------------------------------------------*/
         stage("OWASP ZAP Scan") {
             steps {
                 script {
-                    // Cross-platform working directory
-                    def currentDir = sh(script: "pwd", returnStdout: true).trim()
-                    if (!isUnix()) currentDir = bat(script: "cd", returnStdout: true).trim()
-
                     runCmd """
                         docker run --rm \
                         --network network1 \
-                        -v ${currentDir}${FILE_SEP}${REPORT_DIR}:/zap/wrk/ \
+                        -v ${env.PWD_PATH}${env.FILE_SEP}${REPORT_DIR}:/zap/wrk/ \
                         ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
-                            -t http://demo_app_running:80 \
-                            -r zap_full_report.html \
-                            -J zap_full_report.json \
-                            -a || exit 0
+                        -t http://demo_app_running:80 \
+                        -r zap_full_report.html \
+                        -J zap_full_report.json \
+                        -a || exit 0
                     """
                 }
             }
         }
     }
 
-    /* -----------------------------
-                Final Cleanup
-    ------------------------------*/
+    /* ---------------------------------------------------
+                         FINAL CLEANUP
+    ----------------------------------------------------*/
     post {
         always {
             script {
