@@ -17,7 +17,8 @@ pipeline {
     }
 
     stages {
-    
+
+  
         stage("Build Docker Image") {
             steps {
                 script {
@@ -26,7 +27,7 @@ pipeline {
             }
         }
 
- 
+      
         stage("Cleanup Docker") {
             steps {
                 script {
@@ -35,7 +36,7 @@ pipeline {
             }
         }
 
-       
+      
         stage("Trivy Scan") {
             steps {
                 script {
@@ -44,41 +45,41 @@ pipeline {
 
                     bat """
                     trivy image --format json ^
-                      -o reports\\trivy_report.json ^
-                      --severity MEDIUM,HIGH,CRITICAL ^
-                      ${IMAGE_NAME} || exit 0
+                        -o reports\\trivy_report.json ^
+                        --severity MEDIUM,HIGH,CRITICAL ^
+                        ${IMAGE_NAME} || exit 0
                     """
 
                     bat """
                     trivy image --format template ^
-                      --template "@contrib/html.tpl" ^
-                      -o reports\\trivy_report.html ^
-                      --severity MEDIUM,HIGH,CRITICAL ^
-                      ${IMAGE_NAME} || exit 0
+                        --template "@contrib/html.tpl" ^
+                        -o reports\\trivy_report.html ^
+                        --severity MEDIUM,HIGH,CRITICAL ^
+                        ${IMAGE_NAME} || exit 0
                     """
                 }
             }
         }
 
-       
+      
         stage("Snyk SAST Scan") {
             steps {
                 script {
                     bat "if not exist reports mkdir reports"
 
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
-
                         bat "snyk auth %SNYK_TOKEN%"
                         bat "snyk code test --json > reports\\snyk_source_report.json || exit 0"
                         bat "snyk container test ${IMAGE_NAME} --json > reports\\snyk_container_report.json || exit 0"
+
                         bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
                         bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
                     }
                 }
             }
-
             post {
                 always {
+
                     archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
 
                     publishHTML([
@@ -86,7 +87,8 @@ pipeline {
                         reportFiles: 'snyk_source_report.html',
                         reportName: 'Snyk SAST Report',
                         keepAll: true,
-                        allowMissing: true
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true
                     ])
 
                     publishHTML([
@@ -94,13 +96,14 @@ pipeline {
                         reportFiles: 'snyk_container_report.html',
                         reportName: 'Snyk Container Report',
                         keepAll: true,
-                        allowMissing: true
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true
                     ])
                 }
             }
         }
 
-        
+  
         stage("Grype Scan") {
             steps {
                 script {
@@ -113,14 +116,13 @@ pipeline {
                         script: 'findstr /I "CRITICAL HIGH" reports\\grype_report.json')
 
                     if (foundHigh == 0) {
-                        echo "⚠ Grype found HIGH or CRITICAL vulnerabilities."
-                        currentBuild.result = "UNSTABLE"
+                        echo "⚠ Grype found HIGH/CRITICAL vulnerabilities"
+                        currentBuild.result = 'UNSTABLE'
                     } else {
-                        echo "No HIGH/CRITICAL issues detected by Grype."
+                        echo "No high-severity Grype vulnerabilities found."
                     }
                 }
             }
-
             post {
                 always {
                     archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
@@ -130,13 +132,14 @@ pipeline {
                         reportFiles: 'grype_report.txt',
                         reportName: 'Grype Vulnerability Report',
                         keepAll: true,
-                        allowMissing: true
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true
                     ])
                 }
             }
         }
 
-      
+       
         stage("Push Docker Image") {
             steps {
                 script {
@@ -151,7 +154,7 @@ pipeline {
             }
         }
 
-  
+        
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -159,6 +162,7 @@ pipeline {
                         string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY'),
                         string(credentialsId: 'CosignPassword', variable: 'COSIGN_PASSWORD')
                     ]) {
+
                         bat """
                         echo %COSIGN_KEY% > cosign.key
                         cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/${IMAGE_NAME}
@@ -178,6 +182,7 @@ pipeline {
             }
         }
 
+      
         stage("Run App Container") {
             steps {
                 script {
@@ -188,12 +193,13 @@ pipeline {
                       -p 8123:80 ^
                       ${IMAGE_NAME}
                     """
+
                     bat "ping -n 8 127.0.0.1 >nul"
                 }
             }
         }
 
-     
+       
         stage("Suricata Monitoring") {
             steps {
                 script {
@@ -213,7 +219,6 @@ pipeline {
                     """
                 }
             }
-
             post {
                 always {
                     archiveArtifacts artifacts: 'reports/suricata/eve.json', fingerprint: true
@@ -221,7 +226,7 @@ pipeline {
             }
         }
 
-
+      
         stage("Zeek Monitoring") {
             steps {
                 script {
@@ -238,7 +243,6 @@ pipeline {
                     """
                 }
             }
-
             post {
                 always {
                     archiveArtifacts artifacts: 'reports/zeek/*', fingerprint: true
@@ -246,7 +250,7 @@ pipeline {
             }
         }
 
-       
+     
         stage("OWASP ZAP Scan") {
             steps {
                 script {
@@ -265,9 +269,10 @@ pipeline {
         }
     }
 
-  
+ 
     post {
         always {
+
             script {
                 bat "docker stop demo_app_running || exit 0"
                 bat "docker network rm network1 || exit 0"
@@ -278,7 +283,8 @@ pipeline {
                 reportFiles: 'trivy_report.html,zap_full_report.html',
                 reportName: 'Security Reports',
                 keepAll: true,
-                allowMissing: true
+                allowMissing: true,
+                alwaysLinkToLastBuild: true
             ])
         }
     }
