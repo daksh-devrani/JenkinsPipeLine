@@ -57,29 +57,51 @@ pipeline {
         /* ---------------------------------------------------
                          TRIVY Scan
         ----------------------------------------------------*/
-        stage("Trivy Scan") {
-            steps {
-                script {
-                    runCmd "${env.RM_DIR} ${REPORT_DIR} || echo no reports"
-                    runCmd "mkdir ${REPORT_DIR}"
+     stage("Trivy Scan") {
+    steps {
+        script {
 
-                    runCmd """
-                        trivy image --format json \
-                        -o ${REPORT_DIR}${env.FILE_SEP}trivy_report.json \
-                        --severity MEDIUM,HIGH,CRITICAL \
-                        sreyassharma/signed_images_jenkins:1.0.1 || exit 0
-                    """
+            // Always safe delete of reports
+            runCmd "${env.RM_DIR} ${REPORT_DIR} || echo no reports"
+            runCmd "mkdir ${REPORT_DIR}"
 
-                    runCmd """
-                        trivy image --format template \
-                        --template @tplFormat/html.tpl \
-                        -o ${REPORT_DIR}${env.FILE_SEP}trivy_report.html \
-                        --severity MEDIUM,HIGH,CRITICAL \
-                        sreyassharma/signed_images_jenkins:1.0.1 || exit 0
-                    """
+            echo "🔐 Running Trivy vulnerability scan (non-breaking mode)..."
+
+            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+
+                // JSON scan — always safe
+                def jsonStatus = runCmd(
+                    "trivy image --format json " +
+                    "-o ${REPORT_DIR}${env.FILE_SEP}trivy_report.json " +
+                    "--severity MEDIUM,HIGH,CRITICAL " +
+                    "sreyassharma/signed_images_jenkins:1.0.1"
+                )
+
+                echo "Trivy JSON scan exit code: ${jsonStatus}"
+
+                // HTML conversion wrapped safely
+                echo "Generating Trivy HTML report..."
+
+                def htmlStatus = runCmd(
+                    "trivy image --format template " +
+                    "--template @tplFormat/html.tpl " +
+                    "-o ${REPORT_DIR}${env.FILE_SEP}trivy_report.html " +
+                    "--severity MEDIUM,HIGH,CRITICAL " +
+                    "sreyassharma/signed_images_jenkins:1.0.1"
+                )
+
+                echo "Trivy HTML generation exit code: ${htmlStatus}"
+
+                if (jsonStatus != 0 || htmlStatus != 0) {
+                    echo "⚠ Trivy encountered issues but the pipeline will continue safely."
+                } else {
+                    echo "✅ Trivy scan completed successfully."
                 }
-            }
+            } // catchError ends
         }
+    }
+}
+
 
         /* ---------------------------------------------------
                          SNYK SAST & Container
