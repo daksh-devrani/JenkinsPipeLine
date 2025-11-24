@@ -1,201 +1,153 @@
 def runCmd(cmd) {
-    if (isUnix()) sh(script: cmd)
-    else bat(script: cmd)
+    if (isUnix()) { sh(script: cmd) }
+    else { bat(script: cmd) }
 }
 
 pipeline {
     agent any
 
     environment {
-        REPORT_DIR = "reports"
+        GRYPE_PATH = "C:\\Program Files\\Grype"
+        PATH = "${GRYPE_PATH};C:\\Trivy;C:\\Program Files\\Snyk;${env.PATH}"
     }
 
     stages {
 
-        /* ---------------------------------------------------
-                     Initialize Cross-Platform Vars
-        ----------------------------------------------------*/
-        stage("Init Env Vars") {
-            steps {
-                script {
-                    env.FILE_SEP = isUnix() ? "/" : "\\"
-                    env.RM_DIR   = isUnix() ? "rm -rf" : "rmdir /S /Q"
-                    env.SLEEP8   = isUnix() ? "sleep 8" : "ping -n 8 127.0.0.1 >nul"
-                    env.PWD_PATH = isUnix() ?
-                        sh(script: "pwd", returnStdout: true).trim() :
-                        bat(script: "cd", returnStdout: true).trim()
-
-                    echo "Running on: ${isUnix() ? 'LINUX' : 'WINDOWS'}"
-                    echo "File separator: ${env.FILE_SEP}"
-                    echo "Working directory: ${env.PWD_PATH}"
-                }
-            }
-        }
-
-        /* ---------------------------------------------------
-                         Build Docker
-        ----------------------------------------------------*/
         stage("Build Docker Image") {
             steps {
                 script {
-                    runCmd "docker build -t sreyassharma/signed_images_jenkins:1.0.1 ."
+                    runCmd 'docker build -t sreyassharma/signed_images_jenkins:1.0.1 .'
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         Cleanup Docker
-        ----------------------------------------------------*/
         stage("Cleanup Docker") {
             steps {
                 script {
-                    runCmd "docker image prune -f"
+                    runCmd 'docker image prune -f'
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         TRIVY Scan
-        ----------------------------------------------------*/
-     stage("Trivy Scan") {
-    steps {
-        script {
+        stage("Trivy Scan") {
+            steps {
+                script {
+                    bat 'rmdir /S /Q reports || echo "no reports"'
+                    bat 'mkdir reports'
 
-            // Always safe delete of reports
-            runCmd "${env.RM_DIR} ${REPORT_DIR} || echo no reports"
-            runCmd "mkdir ${REPORT_DIR}"
+                    bat '''
+                        trivy image --format json ^
+                        -o reports\\trivy_report.json ^
+                        --severity MEDIUM,HIGH,CRITICAL ^
+                        sreyassharma/signed_images_jenkins:1.0.1 ^
+                        || exit 0
+                    '''
 
-            echo "🔐 Running Trivy vulnerability scan (non-breaking mode)..."
-
-            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-
-                // JSON scan — always safe
-                def jsonStatus = runCmd(
-                    "trivy image --format json " +
-                    "-o ${REPORT_DIR}${env.FILE_SEP}trivy_report.json " +
-                    "--severity MEDIUM,HIGH,CRITICAL " +
-                    "sreyassharma/signed_images_jenkins:1.0.1"
-                )
-
-                echo "Trivy JSON scan exit code: ${jsonStatus}"
-
-                // HTML conversion wrapped safely
-                echo "Generating Trivy HTML report..."
-
-                def htmlStatus = runCmd(
-                    "trivy image --format template " +
-                    "--template @tplFormat/html.tpl " +
-                    "-o ${REPORT_DIR}${env.FILE_SEP}trivy_report.html " +
-                    "--severity MEDIUM,HIGH,CRITICAL " +
-                    "sreyassharma/signed_images_jenkins:1.0.1"
-                )
-
-                echo "Trivy HTML generation exit code: ${htmlStatus}"
-
-                if (jsonStatus != 0 || htmlStatus != 0) {
-                    echo "⚠ Trivy encountered issues but the pipeline will continue safely."
-                } else {
-                    echo "✅ Trivy scan completed successfully."
+                    bat '''
+                        trivy image --format template ^
+                        --template "@tplFormat\\html.tpl" ^
+                        -o reports\\trivy_report.html ^
+                        --severity MEDIUM,HIGH,CRITICAL ^
+                        sreyassharma/signed_images_jenkins:1.0.1 ^
+                        || exit 0
+                    '''
                 }
-            } // catchError ends
+            }
         }
-    }
-}
 
-
-        /* ---------------------------------------------------
-                         SNYK SAST & Container
-        ----------------------------------------------------*/
         stage("Snyk SAST Scan") {
             steps {
                 script {
-                    runCmd "mkdir ${REPORT_DIR}"
+                    bat "if not exist reports mkdir reports"
 
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
-                        runCmd "snyk auth ${SNYK_TOKEN}"
-
-                        runCmd "snyk code test --json > ${REPORT_DIR}${env.FILE_SEP}snyk_source_report.json || exit 0"
-
-                        runCmd "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > ${REPORT_DIR}${env.FILE_SEP}snyk_container_report.json || exit 0"
-
-                        runCmd "npx snyk-to-html -i ${REPORT_DIR}${env.FILE_SEP}snyk_source_report.json -o ${REPORT_DIR}${env.FILE_SEP}snyk_source_report.html"
-                        runCmd "npx snyk-to-html -i ${REPORT_DIR}${env.FILE_SEP}snyk_container_report.json -o ${REPORT_DIR}${env.FILE_SEP}snyk_container_report.html"
+                        bat "snyk auth %SNYK_TOKEN%"
+                        bat "snyk code test --json > reports\\snyk_source_report.json || exit 0"
+                        bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
+                        bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
+                        bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
                     }
                 }
             }
+
             post {
                 always {
-                    archiveArtifacts artifacts: "${REPORT_DIR}/snyk_*", fingerprint: true
+                    archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
+
                     publishHTML([
                         allowMissing: true,
                         keepAll: true,
                         alwaysLinkToLastBuild: true,
-                        reportDir: REPORT_DIR,
+                        reportDir: 'reports',
                         reportFiles: 'snyk_source_report.html',
                         reportName: 'Snyk SAST Report'
+                    ])
+
+                    publishHTML([
+                        allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        reportDir: 'reports',
+                        reportFiles: 'snyk_container_report.html',
+                        reportName: 'Snyk Container Report'
                     ])
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         Grype Scan
-        ----------------------------------------------------*/
         stage("Grype Scan") {
             steps {
                 script {
 
-                    runCmd "mkdir ${REPORT_DIR}"
+                    bat "if not exist reports mkdir reports"
 
-                    runCmd "grype sreyassharma/signed_images_jenkins:1.0.1 -o json > ${REPORT_DIR}${env.FILE_SEP}grype_report.json || exit 0"
-                    runCmd "grype sreyassharma/signed_images_jenkins:1.0.1 -o table > ${REPORT_DIR}${env.FILE_SEP}grype_report.txt || exit 0"
+                    def grypeStatus = bat(returnStatus: true, script: 'where grype')
+                    if (grypeStatus != 0) {
+                        echo "WARNING: Grype not found on PATH. Make sure Grype is installed on the Jenkins agent."
+                    }
 
-                    def vulnCheckCmd = isUnix() ?
-                        "grep -Ei 'CRITICAL|HIGH' ${REPORT_DIR}${env.FILE_SEP}grype_report.json" :
-                        "findstr /I \"CRITICAL HIGH\" ${REPORT_DIR}${env.FILE_SEP}grype_report.json"
+                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o json > \"%cd%\\reports\\grype_report.json\" || exit 0"
+                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o table > \"%cd%\\reports\\grype_report.txt\" || exit 0"
 
-                    def status = runCmd(vulnCheckCmd)
-
-                    if (status == 0) {
-                        echo "HIGH / CRITICAL vulnerabilities found."
-                        currentBuild.result = "UNSTABLE"
+                    def foundHigh = bat(returnStatus: true, script: '%COMSPEC% /C findstr /I "CRITICAL HIGH" "%cd%\\reports\\grype_report.json"')
+                    if (foundHigh == 0) {
+                        echo "Grype found HIGH or CRITICAL vulnerabilities. Marking build UNSTABLE."
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "No HIGH/CRITICAL vulnerabilities discovered by simple string check."
                     }
                 }
             }
 
             post {
                 always {
-                    archiveArtifacts artifacts: "${REPORT_DIR}/grype_*", fingerprint: true
+
+                    archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
+
                     publishHTML([
                         allowMissing: true,
                         keepAll: true,
                         alwaysLinkToLastBuild: true,
-                        reportDir: REPORT_DIR,
+                        reportDir: 'reports',
                         reportFiles: 'grype_report.txt',
-                        reportName: 'Grype Report'
+                        reportName: 'Grype Vulnerability Report'
                     ])
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         Docker Push
-        ----------------------------------------------------*/
         stage("Push Docker Image") {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        runCmd "echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin"
-                        runCmd "docker push sreyassharma/signed_images_jenkins:1.0.1"
+                        bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
+                        bat "docker push sreyassharma/signed_images_jenkins:1.0.1"
                     }
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         Cosign Signing
-        ----------------------------------------------------*/
         stage("Sign Docker Image") {
             steps {
                 script {
@@ -203,82 +155,109 @@ pipeline {
                         string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY'),
                         string(credentialsId: 'CosignPassword', variable: 'COSIGN_PASSWORD')
                     ]) {
-                        writeFile file: "cosign.key", text: COSIGN_KEY
-                        runCmd "cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1"
-                        runCmd (isUnix() ? "rm cosign.key" : "del cosign.key")
+                        bat '''
+                            echo %COSIGN_KEY% > cosign.key
+                            cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
+                            del cosign.key
+                        '''
                     }
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         Network Create
-        ----------------------------------------------------*/
         stage("Create Network") {
             steps {
                 script {
-                    runCmd "docker network inspect network1 > /dev/null 2>&1 || docker network create network1"
+                    bat 'docker network inspect network1 >nul 2>&1 || docker network create network1'
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         Run App Container
-        ----------------------------------------------------*/
         stage("Run App Container") {
             steps {
                 script {
-                    runCmd """
-                        docker run -d --rm \
-                        --network network1 \
-                        --name demo_app_running \
-                        -p 8123:80 \
+                    bat '''
+                        docker run -d --rm ^
+                        --network network1 ^
+                        --name demo_app_running ^
+                        -p 8123:80 ^
                         sreyassharma/signed_images_jenkins:1.0.1
-                    """
-
-                    runCmd "${env.SLEEP8}"
+                    '''
+                    bat "ping -n 8 127.0.0.1 >nul"
                 }
             }
         }
 
-        /* ---------------------------------------------------
-                         OWASP ZAP Scan
-        ----------------------------------------------------*/
+        stage("Suricata Monitoring") {
+            steps {
+                script {
+                    bat '''
+                        docker run -d --rm ^
+                            --name suricata ^
+                            --network network1 ^
+                            --cap-add=NET_ADMIN ^
+                            --cap-add=NET_RAW ^
+                            jasonish/suricata ^
+                            suricata -i eth0 -c /etc/suricata/suricata.yaml -l /var/log/suricata/
+
+                        rem Wait for Suricata to generate logs
+                        ping -n 10 127.0.0.1 >nul
+
+                        if not exist reports\\suricata mkdir reports\\suricata
+                        docker cp suricata:/var/log/suricata/eve.json reports\\suricata\\eve.json
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    archiveArtifacts artifacts: 'reports/suricata/eve.json', fingerprint: true
+
+                    publishHTML([
+                        allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        reportDir: 'reports/suricata',
+                        reportFiles: 'eve.json',
+                        reportName: 'Suricata Alerts'
+                    ])
+                }
+            }
+        }
+
+
         stage("OWASP ZAP Scan") {
             steps {
                 script {
-                    runCmd """
-                        docker run --rm \
-                        --network network1 \
-                        -v ${env.PWD_PATH}${env.FILE_SEP}${REPORT_DIR}:/zap/wrk/ \
-                        ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
-                        -t http://demo_app_running:80 \
-                        -r zap_full_report.html \
-                        -J zap_full_report.json \
-                        -a || exit 0
-                    """
+                    bat '''
+                        docker run --rm ^
+                        --network network1 ^
+                        -v %cd%\\reports:/zap/wrk/ ^
+                        ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
+                            -t http://demo_app_running:80 ^
+                            -r zap_full_report.html ^
+                            -J zap_full_report.json ^
+                            -a || exit 0
+                    '''
                 }
             }
         }
     }
 
-    /* ---------------------------------------------------
-                         FINAL CLEANUP
-    ----------------------------------------------------*/
     post {
         always {
             script {
-                runCmd "docker stop demo_app_running || exit 0"
-                runCmd "docker network rm network1 || exit 0"
+                bat 'docker stop demo_app_running || exit 0'
+                bat 'docker network rm network1 || exit 0'
             }
 
             publishHTML([
                 allowMissing: true,
                 keepAll: true,
                 alwaysLinkToLastBuild: true,
-                reportDir: REPORT_DIR,
-                reportFiles: "trivy_report.html,zap_full_report.html",
-                reportName: "Security Reports"
+                reportDir: 'reports',
+                reportFiles: 'trivy_report.html,zap_full_report.html',
+                reportName: 'Security Reports'
             ])
         }
     }
