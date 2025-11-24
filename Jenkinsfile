@@ -62,16 +62,9 @@ pipeline {
 
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
-                        echo "Authenticating Snyk..."
                         bat "snyk auth %SNYK_TOKEN%"
-
-                        echo "Running Snyk SAST..."
                         bat "snyk code test --json > reports\\snyk_source_report.json || exit 0"
-
-                        echo "Running Snyk Container Scan..."
                         bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
-
-                        echo "Generating HTML Reports..."
                         bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
                         bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
                     }
@@ -106,7 +99,6 @@ pipeline {
         stage("Grype Scan") {
             steps {
                 script {
-                    echo "Running Grype vulnerability scan on Docker image..."
 
                     bat "if not exist reports mkdir reports"
 
@@ -130,7 +122,6 @@ pipeline {
 
             post {
                 always {
-                    echo "Publishing Grype Reports..."
 
                     archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
 
@@ -196,6 +187,44 @@ pipeline {
                 }
             }
         }
+
+        stage("Suricata Monitoring") {
+            steps {
+                script {
+                    bat '''
+                        docker run -d --rm ^
+                            --name suricata ^
+                            --network network1 ^
+                            --cap-add=NET_ADMIN ^
+                            --cap-add=NET_RAW ^
+                            jasonish/suricata ^
+                            suricata -i eth0 -c /etc/suricata/suricata.yaml -l /var/log/suricata/
+
+                        rem Wait for Suricata to generate logs
+                        ping -n 10 127.0.0.1 >nul
+
+                        if not exist reports\\suricata mkdir reports\\suricata
+                        docker cp suricata:/var/log/suricata/eve.json reports\\suricata\\eve.json
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    archiveArtifacts artifacts: 'reports/suricata/eve.json', fingerprint: true
+
+                    publishHTML([
+                        allowMissing: true,
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        reportDir: 'reports/suricata',
+                        reportFiles: 'eve.json',
+                        reportName: 'Suricata Alerts'
+                    ])
+                }
+            }
+        }
+
 
         stage("OWASP ZAP Scan") {
             steps {
