@@ -7,8 +7,11 @@ pipeline {
     agent any
 
     environment {
-        GRYPE_PATH = "C:\\Program Files\\Grype"
-        PATH = "${GRYPE_PATH};C:\\Trivy;C:\\Program Files\\Snyk;${env.PATH}"
+        TRIVY_PATH = "C:\\trivy_0.67.2_windows-64bit"
+        GRYPE_PATH = "C:\\grype_0.104.0_windows_amd64"
+        SNYK_PATH  = "C:\\Program Files\\Snyk"
+
+        PATH = "${TRIVY_PATH};${GRYPE_PATH};${SNYK_PATH};${env.PATH}"
     }
 
     stages {
@@ -137,128 +140,6 @@ pipeline {
             }
         }
 
-        stage("Push Docker Image") {
-            steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'Docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
-                        bat "docker push sreyassharma/signed_images_jenkins:1.0.1"
-                    }
-                }
-            }
-        }
-
-        stage("Sign Docker Image") {
-            steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY'),
-                        string(credentialsId: 'CosignPassword', variable: 'COSIGN_PASSWORD')
-                    ]) {
-                        bat '''
-                            echo %COSIGN_KEY% > cosign.key
-                            cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
-                            del cosign.key
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage("Create Network") {
-            steps {
-                script {
-                    bat 'docker network inspect network1 >nul 2>&1 || docker network create network1'
-                }
-            }
-        }
-
-        stage("Run App Container") {
-            steps {
-                script {
-                    bat '''
-                        docker run -d --rm ^
-                        --network network1 ^
-                        --name demo_app_running ^
-                        -p 8123:80 ^
-                        sreyassharma/signed_images_jenkins:1.0.1
-                    '''
-                    bat "ping -n 8 127.0.0.1 >nul"
-                }
-            }
-        }
-
-        stage("Suricata Monitoring") {
-            steps {
-                script {
-                    bat '''
-                        docker run -d --rm ^
-                            --name suricata ^
-                            --network network1 ^
-                            --cap-add=NET_ADMIN ^
-                            --cap-add=NET_RAW ^
-                            jasonish/suricata ^
-                            suricata -i eth0 -c /etc/suricata/suricata.yaml -l /var/log/suricata/
-
-                        rem Wait for Suricata to generate logs
-                        ping -n 10 127.0.0.1 >nul
-
-                        if not exist reports\\suricata mkdir reports\\suricata
-                        docker cp suricata:/var/log/suricata/eve.json reports\\suricata\\eve.json
-                    '''
-                }
-            }
-
-            post {
-                always {
-                    archiveArtifacts artifacts: 'reports/suricata/eve.json', fingerprint: true
-
-                    publishHTML([
-                        allowMissing: true,
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        reportDir: 'reports/suricata',
-                        reportFiles: 'eve.json',
-                        reportName: 'Suricata Alerts'
-                    ])
-                }
-            }
-        }
-
-
-        stage("OWASP ZAP Scan") {
-            steps {
-                script {
-                    bat '''
-                        docker run --rm ^
-                        --network network1 ^
-                        -v %cd%\\reports:/zap/wrk/ ^
-                        ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py ^
-                            -t http://demo_app_running:80 ^
-                            -r zap_full_report.html ^
-                            -J zap_full_report.json ^
-                            -a || exit 0
-                    '''
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            script {
-                bat 'docker stop demo_app_running || exit 0'
-                bat 'docker network rm network1 || exit 0'
-            }
-
-            publishHTML([
-                allowMissing: true,
-                keepAll: true,
-                alwaysLinkToLastBuild: true,
-                reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_full_report.html',
-                reportName: 'Security Reports'
-            ])
-        }
+        
     }
 }
