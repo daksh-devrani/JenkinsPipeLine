@@ -14,7 +14,6 @@ pipeline {
         PATH = "${GRYPE_PATH};${TRIVY_PATH};${SNYK_PATH};${env.PATH}"
     }
 
-
     stages {
 
         stage("Build Docker Image") {
@@ -85,7 +84,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_source_report.html',
-                        reportName: 'Snyk SAST Report'
+                        reportName: 'Snyk SAST Report',
+                        reportTitles: 'Snyk SAST Scan'
                     ])
 
                     publishHTML([
@@ -94,7 +94,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_container_report.html',
-                        reportName: 'Snyk Container Report'
+                        reportName: 'Snyk Container Report',
+                        reportTitles: 'Snyk Container Scan'
                     ])
                 }
             }
@@ -135,7 +136,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports',
                         reportFiles: 'grype_report.txt',
-                        reportName: 'Grype Vulnerability Report'
+                        reportName: 'Grype Vulnerability Report',
+                        reportTitles: 'Grype Scan Output'
                     ])
                 }
             }
@@ -204,7 +206,6 @@ pipeline {
                             jasonish/suricata ^
                             suricata -i eth0 -c /etc/suricata/suricata.yaml -l /var/log/suricata/
 
-                        rem Wait for Suricata to generate logs
                         ping -n 10 127.0.0.1 >nul
 
                         if not exist reports\\suricata mkdir reports\\suricata
@@ -223,7 +224,8 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         reportDir: 'reports/suricata',
                         reportFiles: 'eve.json',
-                        reportName: 'Suricata Alerts'
+                        reportName: 'Suricata Alerts',
+                        reportTitles: 'Suricata IDS Events'
                     ])
                 }
             }
@@ -253,13 +255,16 @@ pipeline {
                     publishHTML([
                         allowMissing: true,
                         keepAll: true,
+                        alwaysLinkToLastBuild: true,
                         reportDir: 'reports/zeek',
                         reportFiles: 'conn.log',
-                        reportName: 'Zeek Connection Logs'
+                        reportName: 'Zeek Connection Logs',
+                        reportTitles: 'Zeek Network Monitoring'
                     ])
                 }
             }
         }
+
         stage("OWASP ZAP Scan") {
             steps {
                 script {
@@ -291,7 +296,8 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 reportDir: 'reports',
                 reportFiles: 'trivy_report.html,zap_full_report.html',
-                reportName: 'Security Reports'
+                reportName: 'Security Reports',
+                reportTitles: 'Trivy & ZAP Reports'
             ])
         }
     }
