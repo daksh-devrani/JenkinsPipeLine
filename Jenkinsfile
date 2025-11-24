@@ -7,9 +7,13 @@ pipeline {
     agent any
 
     environment {
-        GRYPE_PATH = "C:\\Program Files\\Grype"
-        PATH = "${GRYPE_PATH};C:\\Trivy;C:\\Program Files\\Snyk;${env.PATH}"
+        GRYPE_PATH = "C:\\grype_0.104.0_windows_amd64"
+        TRIVY_PATH = "C:\\trivy_0.67.2_windows-64bit"
+        SNYK_PATH  = "C:\\Program Files\\Snyk"
+
+        PATH = "${GRYPE_PATH};${TRIVY_PATH};${SNYK_PATH};${env.PATH}"
     }
+
 
     stages {
 
