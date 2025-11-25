@@ -93,8 +93,12 @@
             {{ $source }}: {{ $cvss.Score }} ({{ $cvss.Vector }})<br>
           {{- end }}
         </td>
-        <td>{{ escapeXML .Vulnerability.PublishedDate }}</td>
-        <td>{{ escapeXML .Vulnerability.LastModifiedDate }}</td>
+
+        <!-- FIXED LINES BELOW -->
+        <td>{{ printf "%v" .Vulnerability.PublishedDate }}</td>
+        <td>{{ printf "%v" .Vulnerability.LastModifiedDate }}</td>
+        <!-- FIXED LINES END -->
+
         <td class="links" data-more-links="off">
           {{- range .Vulnerability.References }}
           <a href={{ escapeXML . | printf "%q" }}>{{ escapeXML . }}</a>
