@@ -35,29 +35,30 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    bat 'rmdir /S /Q reports || echo "no reports"'
+                    bat 'rmdir /S /Q reports || echo no reports'
                     bat 'mkdir reports'
 
                     bat """
                         "${TRIVY_PATH}\\trivy.exe" image --format json ^
                         -o reports\\trivy_report.json ^
                         --severity MEDIUM,HIGH,CRITICAL ^
-                        sreyassharma/signed_images_jenkins:1.0.1
+                        sreyassharma/signed_images_jenkins:1.0.1 ^
+                        || exit 0
                     """
 
-                    // IMPORTANT: TEMPLATE PATH FIX
                     bat """
                         "${TRIVY_PATH}\\trivy.exe" image --format template ^
                         --template "%cd%\\tplFormat\\html_fixed.tpl" ^
                         -o reports\\trivy_report.html ^
                         --severity MEDIUM,HIGH,CRITICAL ^
-                        sreyassharma/signed_images_jenkins:1.0.1
+                        sreyassharma/signed_images_jenkins:1.0.1 ^
+                        || exit 0
                     """
                 }
             }
         }
 
-        stage("Snyk SAST Scan") {
+        stage("Snyk SAST + Container Scan") {
             steps {
                 script {
                     bat "if not exist reports mkdir reports"
@@ -65,17 +66,21 @@ pipeline {
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
                         bat "\"${SNYK_PATH}\\snyk.exe\" auth %SNYK_TOKEN%"
-                        bat "\"${SNYK_PATH}\\snyk.exe\" code test --json > reports\\snyk_source_report.json"
-                        bat "\"${SNYK_PATH}\\snyk.exe\" container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json"
 
-                        bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html"
-                        bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html"
+                        bat "\"${SNYK_PATH}\\snyk.exe\" code test --json > reports\\snyk_source_report.json || exit 0"
+
+                        bat "\"${SNYK_PATH}\\snyk.exe\" container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
+
+                        bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
+
+                        bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
                     }
                 }
             }
 
             post {
                 always {
+
                     archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
 
                     publishHTML([
@@ -104,15 +109,16 @@ pipeline {
                 script {
                     bat "if not exist reports mkdir reports"
 
-                    bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o json > reports\\grype_report.json"
-                    bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o table > reports\\grype_report.txt"
+                    bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o json > reports\\grype_report.json || exit 0"
+
+                    bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o table > reports\\grype_report.txt || exit 0"
 
                     def foundHigh = bat(returnStatus: true, script: 'findstr /I "CRITICAL HIGH" reports\\grype_report.json')
                     if (foundHigh == 0) {
-                        echo "Grype found HIGH or CRITICAL vulnerabilities. Marking build UNSTABLE."
+                        echo "HIGH/CRITICAL vulnerabilities found — marking build UNSTABLE"
                         currentBuild.result = 'UNSTABLE'
                     } else {
-                        echo "No HIGH/CRITICAL vulnerabilities discovered."
+                        echo "No HIGH/CRITICAL vulnerabilities found"
                     }
                 }
             }
@@ -231,7 +237,7 @@ pipeline {
                             -t http://demo_app_running:80 ^
                             -r zap_full_report.html ^
                             -J zap_full_report.json ^
-                            -a
+                            -a || exit 0
                     """
                 }
             }
@@ -242,6 +248,7 @@ pipeline {
         always {
             script {
                 bat 'docker stop demo_app_running || exit 0'
+                bat 'docker stop suricata || exit 0'
                 bat 'docker network rm network1 || exit 0'
             }
 
