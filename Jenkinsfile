@@ -35,40 +35,44 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    bat 'rmdir /S /Q reports || echo "no reports"'
+                    bat 'rmdir /S /Q reports || echo no reports'
                     bat 'mkdir reports'
 
-                    bat '''
-                        trivy image --format json ^
+                    bat """
+                        "${TRIVY_PATH}\\trivy.exe" image --format json ^
                         -o reports\\trivy_report.json ^
                         --severity MEDIUM,HIGH,CRITICAL ^
                         sreyassharma/signed_images_jenkins:1.0.1 ^
                         || exit 0
-                    '''
+                    """
 
-                    bat '''
-                        trivy image --format template ^
-                        --template "@tplFormat\\html.tpl" ^
+                    bat """
+                        "${TRIVY_PATH}\\trivy.exe" image --format template ^
+                        --template "%cd%\\tplFormat\\html_fixed.tpl" ^
                         -o reports\\trivy_report.html ^
                         --severity MEDIUM,HIGH,CRITICAL ^
                         sreyassharma/signed_images_jenkins:1.0.1 ^
                         || exit 0
-                    '''
+                    """
                 }
             }
         }
 
-        stage("Snyk SAST Scan") {
+        stage("Snyk SAST + Container Scan") {
             steps {
                 script {
                     bat "if not exist reports mkdir reports"
 
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
-                        bat "snyk auth %SNYK_TOKEN%"
-                        bat "snyk code test --json > reports\\snyk_source_report.json || exit 0"
-                        bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
+                        bat "\"${SNYK_PATH}\\snyk.exe\" auth %SNYK_TOKEN%"
+
+                        bat "\"${SNYK_PATH}\\snyk.exe\" code test --json > reports\\snyk_source_report.json || exit 0"
+
+                        bat "\"${SNYK_PATH}\\snyk.exe\" container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
+
                         bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
+
                         bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
                     }
                 }
@@ -76,26 +80,25 @@ pipeline {
 
             post {
                 always {
+
                     archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
 
                     publishHTML([
                         allowMissing: true,
-                        keepAll: true,
                         alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_source_report.html',
-                        reportName: 'Snyk SAST Report',
-                        reportTitles: 'Snyk SAST Scan'
+                        reportName: 'Snyk SAST Report'
                     ])
 
                     publishHTML([
                         allowMissing: true,
-                        keepAll: true,
                         alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_container_report.html',
-                        reportName: 'Snyk Container Report',
-                        reportTitles: 'Snyk Container Scan'
+                        reportName: 'Snyk Container Report'
                     ])
                 }
             }
@@ -104,40 +107,33 @@ pipeline {
         stage("Grype Scan") {
             steps {
                 script {
-
                     bat "if not exist reports mkdir reports"
 
-                    def grypeStatus = bat(returnStatus: true, script: 'where grype')
-                    if (grypeStatus != 0) {
-                        echo "WARNING: Grype not found on PATH. Make sure Grype is installed on the Jenkins agent."
-                    }
+                    bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o json > reports\\grype_report.json || exit 0"
 
-                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o json > \"%cd%\\reports\\grype_report.json\" || exit 0"
-                    bat "%COMSPEC% /C grype sreyassharma/signed_images_jenkins:1.0.1 -o table > \"%cd%\\reports\\grype_report.txt\" || exit 0"
+                    bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o table > reports\\grype_report.txt || exit 0"
 
-                    def foundHigh = bat(returnStatus: true, script: '%COMSPEC% /C findstr /I "CRITICAL HIGH" "%cd%\\reports\\grype_report.json"')
+                    def foundHigh = bat(returnStatus: true, script: 'findstr /I "CRITICAL HIGH" reports\\grype_report.json')
                     if (foundHigh == 0) {
-                        echo "Grype found HIGH or CRITICAL vulnerabilities. Marking build UNSTABLE."
+                        echo "HIGH/CRITICAL vulnerabilities found — marking build UNSTABLE"
                         currentBuild.result = 'UNSTABLE'
                     } else {
-                        echo "No HIGH/CRITICAL vulnerabilities discovered by simple string check."
+                        echo "No HIGH/CRITICAL vulnerabilities found"
                     }
                 }
             }
 
             post {
                 always {
-
                     archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
 
                     publishHTML([
                         allowMissing: true,
-                        keepAll: true,
                         alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports',
                         reportFiles: 'grype_report.txt',
-                        reportName: 'Grype Vulnerability Report',
-                        reportTitles: 'Grype Scan Output'
+                        reportName: 'Grype Vulnerability Report'
                     ])
                 }
             }
@@ -161,11 +157,11 @@ pipeline {
                         string(credentialsId: 'CosignPrivateKey', variable: 'COSIGN_KEY'),
                         string(credentialsId: 'CosignPassword', variable: 'COSIGN_PASSWORD')
                     ]) {
-                        bat '''
+                        bat """
                             echo %COSIGN_KEY% > cosign.key
                             cosign sign --key cosign.key --pass-env COSIGN_PASSWORD docker.io/sreyassharma/signed_images_jenkins:1.0.1
                             del cosign.key
-                        '''
+                        """
                     }
                 }
             }
@@ -182,13 +178,13 @@ pipeline {
         stage("Run App Container") {
             steps {
                 script {
-                    bat '''
+                    bat """
                         docker run -d --rm ^
                         --network network1 ^
                         --name demo_app_running ^
                         -p 8123:80 ^
                         sreyassharma/signed_images_jenkins:1.0.1
-                    '''
+                    """
                     bat "ping -n 8 127.0.0.1 >nul"
                 }
             }
@@ -197,7 +193,7 @@ pipeline {
         stage("Suricata Monitoring") {
             steps {
                 script {
-                    bat '''
+                    bat """
                         docker run -d --rm ^
                             --name suricata ^
                             --network network1 ^
@@ -210,7 +206,7 @@ pipeline {
 
                         if not exist reports\\suricata mkdir reports\\suricata
                         docker cp suricata:/var/log/suricata/eve.json reports\\suricata\\eve.json
-                    '''
+                    """
                 }
             }
 
@@ -220,46 +216,11 @@ pipeline {
 
                     publishHTML([
                         allowMissing: true,
-                        keepAll: true,
                         alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports/suricata',
                         reportFiles: 'eve.json',
-                        reportName: 'Suricata Alerts',
-                        reportTitles: 'Suricata IDS Events'
-                    ])
-                }
-            }
-        }
-
-        stage("Zeek Monitoring") {
-            steps {
-                script {
-                    bat '''
-                        docker run -d --rm ^
-                            --name zeek ^
-                            --network network1 ^
-                            zeekurity/zeek zeek -i eth0
-
-                        timeout /t 10 >nul
-
-                        if not exist reports\\zeek mkdir reports\\zeek
-                        docker cp zeek:/usr/local/zeek/logs/. reports\\zeek
-                    '''
-                }
-            }
-
-            post {
-                always {
-                    archiveArtifacts artifacts: 'reports/zeek//*', fingerprint: true
-
-                    publishHTML([
-                        allowMissing: true,
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        reportDir: 'reports/zeek',
-                        reportFiles: 'conn.log',
-                        reportName: 'Zeek Connection Logs',
-                        reportTitles: 'Zeek Network Monitoring'
+                        reportName: 'Suricata Alerts'
                     ])
                 }
             }
@@ -268,7 +229,7 @@ pipeline {
         stage("OWASP ZAP Scan") {
             steps {
                 script {
-                    bat '''
+                    bat """
                         docker run --rm ^
                         --network network1 ^
                         -v %cd%\\reports:/zap/wrk/ ^
@@ -277,7 +238,7 @@ pipeline {
                             -r zap_full_report.html ^
                             -J zap_full_report.json ^
                             -a || exit 0
-                    '''
+                    """
                 }
             }
         }
@@ -287,17 +248,17 @@ pipeline {
         always {
             script {
                 bat 'docker stop demo_app_running || exit 0'
+                bat 'docker stop suricata || exit 0'
                 bat 'docker network rm network1 || exit 0'
             }
 
             publishHTML([
                 allowMissing: true,
-                keepAll: true,
                 alwaysLinkToLastBuild: true,
+                keepAll: true,
                 reportDir: 'reports',
                 reportFiles: 'trivy_report.html,zap_full_report.html',
-                reportName: 'Security Reports',
-                reportTitles: 'Trivy & ZAP Reports'
+                reportName: 'Security Reports'
             ])
         }
     }
