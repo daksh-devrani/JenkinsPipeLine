@@ -38,7 +38,6 @@ pipeline {
                     bat 'rmdir /S /Q reports || echo "no reports"'
                     bat 'mkdir reports'
 
-                    // JSON report
                     bat """
                         "${TRIVY_PATH}\\trivy.exe" image --format json ^
                         -o reports\\trivy_report.json ^
@@ -46,7 +45,7 @@ pipeline {
                         sreyassharma/signed_images_jenkins:1.0.1
                     """
 
-                    // HTML report using correct template path inside workspace
+                    // IMPORTANT: TEMPLATE PATH FIX
                     bat """
                         "${TRIVY_PATH}\\trivy.exe" image --format template ^
                         --template "%cd%\\tplFormat\\html_fixed.tpl" ^
@@ -66,7 +65,6 @@ pipeline {
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
                         bat "\"${SNYK_PATH}\\snyk.exe\" auth %SNYK_TOKEN%"
-                        
                         bat "\"${SNYK_PATH}\\snyk.exe\" code test --json > reports\\snyk_source_report.json"
                         bat "\"${SNYK_PATH}\\snyk.exe\" container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json"
 
@@ -81,12 +79,18 @@ pipeline {
                     archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
 
                     publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_source_report.html',
                         reportName: 'Snyk SAST Report'
                     ])
 
                     publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports',
                         reportFiles: 'snyk_container_report.html',
                         reportName: 'Snyk Container Report'
@@ -98,13 +102,9 @@ pipeline {
         stage("Grype Scan") {
             steps {
                 script {
-
                     bat "if not exist reports mkdir reports"
 
-                    // JSON
                     bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o json > reports\\grype_report.json"
-                    
-                    // Table
                     bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o table > reports\\grype_report.txt"
 
                     def foundHigh = bat(returnStatus: true, script: 'findstr /I "CRITICAL HIGH" reports\\grype_report.json')
@@ -122,6 +122,9 @@ pipeline {
                     archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
 
                     publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports',
                         reportFiles: 'grype_report.txt',
                         reportName: 'Grype Vulnerability Report'
@@ -206,6 +209,9 @@ pipeline {
                     archiveArtifacts artifacts: 'reports/suricata/eve.json', fingerprint: true
 
                     publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
                         reportDir: 'reports/suricata',
                         reportFiles: 'eve.json',
                         reportName: 'Suricata Alerts'
@@ -240,6 +246,9 @@ pipeline {
             }
 
             publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
                 reportDir: 'reports',
                 reportFiles: 'trivy_report.html,zap_full_report.html',
                 reportName: 'Security Reports'
