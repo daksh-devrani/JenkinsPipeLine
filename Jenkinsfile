@@ -32,12 +32,12 @@ pipeline {
             }
         }
 
-        stage("Trivy Scan") {
+       stage("Trivy Scan") {
             steps {
                 script {
                     bat 'rmdir /S /Q reports || echo "no reports"'
                     bat 'mkdir reports'
-
+        
                     bat '''
                         trivy image --format json ^
                         -o reports\\trivy_report.json ^
@@ -45,10 +45,10 @@ pipeline {
                         sreyassharma/signed_images_jenkins:1.0.1 ^
                         || exit 0
                     '''
-
+        
                     bat '''
                         trivy image --format template ^
-                        --template "@tplFormat\\html.tpl" ^
+                        --template "@tplFormat\\html_fixed.tpl" ^
                         -o reports\\trivy_report.html ^
                         --severity MEDIUM,HIGH,CRITICAL ^
                         sreyassharma/signed_images_jenkins:1.0.1 ^
@@ -57,6 +57,7 @@ pipeline {
                 }
             }
         }
+
 
         stage("Snyk SAST Scan") {
             steps {
