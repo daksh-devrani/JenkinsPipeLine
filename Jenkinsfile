@@ -232,7 +232,7 @@ pipeline {
             }
         }
 
-        stage("Zeek Monitoring") {
+        /**stage("Zeek Monitoring") {
             steps {
                 script {
                     bat '''
@@ -264,7 +264,7 @@ pipeline {
                     ])
                 }
             }
-        }
+        }**/
 
         stage("OWASP ZAP Scan") {
             steps {
