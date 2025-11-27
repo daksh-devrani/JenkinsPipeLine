@@ -58,13 +58,33 @@ pipeline {
 
         stage('Snyk Security Scan') {
             steps {
-                snykSecurity(
-                    snykInstallation: 'Snyk',
-                    snykTokenId: 'SnykToken',
-                    failOnIssues: false,
-                    failOnError: false,
-                    severity: 'high'
-                )
+                withCredentials([string(credentialsId: 'SnykToken_Text', variable: 'SNYK_TOKEN')]) {
+                    script {
+                        if (isUnix()) {
+                            // Authenticate once
+                            sh 'snyk auth $SNYK_TOKEN'
+
+                            // Source (dependency) scan
+                            sh 'snyk test --json > reports/snyk_source_report.json || true'
+                            sh 'snyk test --json | snyk-to-html -o reports/snyk_source_report.html || true'
+
+                            // Container image scan
+                            sh 'snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports/snyk_container_report.json || true'
+                            sh 'snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json | snyk-to-html -o reports/snyk_container_report.html || true'
+
+                        } else {
+                            bat "snyk auth %SNYK_TOKEN%"
+
+                            // Source (dependency) scan
+                            bat "snyk test --json > reports\\snyk_source_report.json || exit /b 0"
+                            bat "snyk test --json | snyk-to-html -o reports\\snyk_source_report.html || exit /b 0"
+
+                            // Container image scan
+                            bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit /b 0"
+                            bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json | snyk-to-html -o reports\\snyk_container_report.html || exit /b 0"
+                        }
+                    }
+                }
             }
         }
 
@@ -295,7 +315,12 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_full_report.html, snyk_source_report.html, snyk_container_report.html,grype_report.txt,eve.json',
+                reportFiles:    'trivy_report.html,
+                                snyk_source_report.html,
+                                snyk_container_report.html,
+                                zap_full_report.html,
+                                grype_report.txt,eve.json
+                                ',
                 reportName: 'Security Reports'
             ])
         }
