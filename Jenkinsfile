@@ -64,8 +64,6 @@ pipeline {
                     severity: 'medium,high,critical', // severities to check
                     projectName: 'jenkins-demo',      // optional: name shown in Snyk dashboard
                     targetFile: 'package.json',       // or Dockerfile, etc.
-                    jsonOutputFile: 'reports/snyk_source_report.json',   // CLI JSON report
-                    htmlOutputFile: 'reports/snyk_source_report.html'    // HTML report
                 )
             }
         }
