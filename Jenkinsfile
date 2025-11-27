@@ -317,11 +317,11 @@ pipeline {
 
     post {
         always {
-            script {
-                // runCmd 'docker stop demo_app_running || exit 0'
-                // runCmd 'docker stop suricata || exit 0'
-                // runCmd 'docker network rm network1 || exit 0'
-            }
+            // script {
+            //     // runCmd 'docker stop demo_app_running || exit 0'
+            //     // runCmd 'docker stop suricata || exit 0'
+            //     // runCmd 'docker network rm network1 || exit 0'
+            // }
 
             publishHTML([
                 allowMissing: true,
