@@ -35,10 +35,10 @@
     <script>
       window.onload = function() {
         document.querySelectorAll('td.links').forEach(function(linkCell) {
-          var links = [].concat.apply([], linkCell.querySelectorAll('a'));
-          [].sort.apply(links, function(a, b) { return a.href > b.href ? 1 : -1; });
+          var links = Array.from(linkCell.querySelectorAll('a'));
+          links.sort(function(a, b) { return a.href.localeCompare(b.href); });
           links.forEach(function(link, idx) {
-            if (links.length > 3 && 3 === idx) {
+            if (links.length > 3 && idx === 3) {
               var toggleLink = document.createElement('a');
               toggleLink.innerText = "Toggle more links";
               toggleLink.href = "#toggleMore";
@@ -51,7 +51,7 @@
         document.querySelectorAll('a.toggle-more-links').forEach(function(toggleLink) {
           toggleLink.onclick = function() {
             var expanded = toggleLink.parentElement.getAttribute("data-more-links");
-            toggleLink.parentElement.setAttribute("data-more-links", "on" === expanded ? "off" : "on");
+            toggleLink.parentElement.setAttribute("data-more-links", expanded === "on" ? "off" : "on");
             return false;
           };
         });
@@ -130,6 +130,7 @@
     {{- end }}
     </table>
 {{- else }}
+    <title>Trivy Report - Empty</title>
   </head>
   <body>
     <h1>Trivy Returned Empty Report</h1>
