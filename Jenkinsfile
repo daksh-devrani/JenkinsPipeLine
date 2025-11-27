@@ -315,12 +315,7 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'reports',
-                reportFiles:    'trivy_report.html,
-                                snyk_source_report.html,
-                                snyk_container_report.html,
-                                zap_full_report.html,
-                                grype_report.txt,eve.json
-                                ',
+                reportFiles: 'trivy_report.html, snyk_source_report.html, snyk_container_report.html, zap_full_report.html, grype_report.txt,eve.json',
                 reportName: 'Security Reports'
             ])
         }
