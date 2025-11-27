@@ -77,31 +77,6 @@ pipeline {
                     }
                 }
             }
-
-            post {
-                always {
-
-                    archiveArtifacts artifacts: 'reports/snyk_*', fingerprint: true
-
-                    publishHTML([
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'reports',
-                        reportFiles: 'snyk_source_report.html',
-                        reportName: 'Snyk SAST Report'
-                    ])
-
-                    publishHTML([
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'reports',
-                        reportFiles: 'snyk_container_report.html',
-                        reportName: 'Snyk Container Report'
-                    ])
-                }
-            }
         }
 
         stage("Grype Scan") {
@@ -120,21 +95,6 @@ pipeline {
                     } else {
                         echo "No HIGH/CRITICAL vulnerabilities found"
                     }
-                }
-            }
-
-            post {
-                always {
-                    archiveArtifacts artifacts: 'reports/grype_*', fingerprint: true
-
-                    publishHTML([
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'reports',
-                        reportFiles: 'grype_report.txt',
-                        reportName: 'Grype Vulnerability Report'
-                    ])
                 }
             }
         }
@@ -209,21 +169,6 @@ pipeline {
                     """
                 }
             }
-
-            post {
-                always {
-                    archiveArtifacts artifacts: 'reports/suricata/eve.json', fingerprint: true
-
-                    publishHTML([
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'reports/suricata',
-                        reportFiles: 'eve.json',
-                        reportName: 'Suricata Alerts'
-                    ])
-                }
-            }
         }
 
         stage("OWASP ZAP Scan") {
@@ -257,7 +202,7 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html,zap_full_report.html',
+                reportFiles: 'trivy_report.html,zap_full_report.html, snyk_source_report.html, snyk_container_report.html,grype_report.txt,eve.json',
                 reportName: 'Security Reports'
             ])
         }
