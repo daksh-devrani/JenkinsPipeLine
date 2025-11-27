@@ -56,40 +56,14 @@ pipeline {
             }
         }
 
-        // stage("Snyk SAST + Container Scan") {
-        //     steps {
-        //         script {
-        //             withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
-
-        //                 if(isUnix()) {
-        //                     sh '''
-        //                     snyk auth ${SNYK_TOKEN}
-        //                     snyk code test --json > reports/snyk_source_report.json || exit 0
-        //                     snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports/snyk_container_report.json || exit 0
-        //                     npx snyk-to-html -i reports/snyk_source_report.json -o reports/snyk_source_report.html || exit 0
-        //                     npx snyk-to-html -i reports/snyk_container_report.json -o reports/snyk_container_report.html || exit 0
-        //                     '''
-        //                 }
-                        
-        //                 else{
-        //                     bat "\"${SNYK_PATH}\\snyk.exe\" auth %SNYK_TOKEN%"
-        //                     bat "\"${SNYK_PATH}\\snyk.exe\" code test --json > reports\\snyk_source_report.json || exit 0"
-        //                     bat "\"${SNYK_PATH}\\snyk.exe\" container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
-        //                     bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
-        //                     bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
         stage('Snyk Security Scan') {
             steps {
                 snykSecurity(
-                    snykToken: SnykToken,
-                    failOnIssues: false,   // fail build if vulnerabilities found
-                    monitorProject: true, // send results to Snyk dashboard
-                    severity: 'high'      // threshold: low, medium, high
+                    snykInstallation: 'Snyk',
+                    snykTokenId: 'SnykToken',
+                    failOnIssues: false,
+                    failOnError: false,
+                    severity: 'high'
                 )
             }
         }
