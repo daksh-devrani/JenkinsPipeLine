@@ -59,7 +59,7 @@ pipeline {
         stage('Snyk SAST + Container Scan') {
             steps {
                 snykSecurity(
-                    snykTokenId: 'snyk',              // ID of your Snyk API token credential
+                    snykTokenId: 'Snyk',              // ID of your Snyk API token credential
                     failOnIssues: false,              // don't fail build if vulnerabilities found
                     severity: 'medium,high,critical', // severities to check
                     projectName: 'jenkins-demo',      // optional: name shown in Snyk dashboard
