@@ -196,7 +196,7 @@ pipeline {
 
                             sleep 10
 
-                            docker cp suricata:/var/log/suricata/eve.json reports/suricata/eve.json
+                            docker cp suricata:/var/log/suricata/eve.json reports/eve.json
                         '''
                     }
 
