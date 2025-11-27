@@ -56,30 +56,17 @@ pipeline {
             }
         }
 
-        stage("Snyk SAST + Container Scan") {
+        stage('Snyk SAST + Container Scan') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
-
-                        if(isUnix()) {
-                            sh '''
-                            snyk auth ${SNYK_TOKEN}
-                            snyk code test --json > reports/snyk_source_report.json || exit 0
-                            snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports/snyk_container_report.json || exit 0
-                            npx snyk-to-html -i reports/snyk_source_report.json -o reports/snyk_source_report.html || exit 0
-                            npx snyk-to-html -i reports/snyk_container_report.json -o reports/snyk_container_report.html || exit 0
-                            '''
-                        }
-                        
-                        else{
-                            bat "\"${SNYK_PATH}\\snyk.exe\" auth %SNYK_TOKEN%"
-                            bat "\"${SNYK_PATH}\\snyk.exe\" code test --json > reports\\snyk_source_report.json || exit 0"
-                            bat "\"${SNYK_PATH}\\snyk.exe\" container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit 0"
-                            bat "npx snyk-to-html -i reports\\snyk_source_report.json -o reports\\snyk_source_report.html || exit 0"
-                            bat "npx snyk-to-html -i reports\\snyk_container_report.json -o reports\\snyk_container_report.html || exit 0"
-                        }
-                    }
-                }
+                snykSecurity(
+                    snykTokenId: 'snyk',              // ID of your Snyk API token credential
+                    failOnIssues: false,              // don't fail build if vulnerabilities found
+                    severity: 'medium,high,critical', // severities to check
+                    projectName: 'jenkins-demo',      // optional: name shown in Snyk dashboard
+                    targetFile: 'package.json',       // or Dockerfile, etc.
+                    jsonOutputFile: 'reports/snyk_source_report.json',   // CLI JSON report
+                    htmlOutputFile: 'reports/snyk_source_report.html'    // HTML report
+                )
             }
         }
 
@@ -300,9 +287,9 @@ pipeline {
     post {
         always {
             script {
-                bat 'docker stop demo_app_running || exit 0'
-                bat 'docker stop suricata || exit 0'
-                bat 'docker network rm network1 || exit 0'
+                runCmd 'docker stop demo_app_running || exit 0'
+                runCmd 'docker stop suricata || exit 0'
+                runCmd 'docker network rm network1 || exit 0'
             }
 
             publishHTML([
