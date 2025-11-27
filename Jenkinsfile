@@ -239,6 +239,19 @@ pipeline {
             }
         }
 
+        stage("Convert Suricata Report") {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh 'python3 scripts/eve_to_html.py'
+                    } else {
+                        bat 'python scripts\\eve_to_html.py'
+                    }
+                }
+            }
+        }
+
+
         stage("OWASP ZAP Scan") {
 		    steps {
 		        script {
