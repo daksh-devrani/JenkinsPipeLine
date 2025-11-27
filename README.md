@@ -1,106 +1,103 @@
-# Jenkins CI/CD Pipeline with Security Scanning and Signing
+# Jenkins Pipeline for Secure Docker Image Build & Scan 🔐🐳
 
-This repository contains a Jenkins pipeline (`Jenkinsfile`) that builds, scans, signs, and deploys Docker images with multiple security tools integrated. The pipeline ensures that container images are tested against vulnerabilities and monitored before being pushed to a registry.
+This repository contains a **Jenkins pipeline script** that automates the process of building, scanning, signing, and deploying Docker images with multiple security tools integrated. It ensures that container images are thoroughly tested for vulnerabilities before being pushed and signed.
 
 ---
 
 ## 📋 Features
 
-- **Docker Build & Cleanup**
-  - Builds a Docker image from the project source.
-  - Cleans up unused Docker images to save space.
-
-- **Security Scanning**
+- **Cross-platform support**: Works on both Unix (Linux/macOS) and Windows agents.
+- **Docker build & cleanup**: Builds the application image and prunes unused images.
+- **Security Scans**:
   - **Trivy**: Scans Docker images for vulnerabilities and generates JSON/HTML reports.
-  - **Snyk**: Performs open-source dependency and container vulnerability scanning.
-  - **Grype**: Scans Docker images for vulnerabilities with JSON and table outputs.
-  - **OWASP ZAP**: Performs dynamic application security testing (DAST) against the running container.
-  - **Suricata**: Monitors network traffic for suspicious activity.
-
-- **Image Signing**
-  - Uses **Cosign** to sign Docker images with private keys for supply chain security.
-
-- **Deployment**
-  - Pushes signed Docker images to Docker Hub.
-  - Runs the application container in a custom Docker network.
-  - Runs Suricata and OWASP ZAP containers for monitoring and scanning.
-
-- **Reporting**
-  - Publishes consolidated HTML reports in Jenkins (`PublishHTML` plugin).
-  - Reports include results from Trivy, Grype, Snyk, OWASP ZAP, and Suricata.
+  - **Snyk**: Performs dependency and container scans with HTML/JSON reports.
+  - **Grype**: Scans images for vulnerabilities with JSON and table outputs.
+- **Image Signing**:
+  - Uses **Cosign** to sign Docker images with private keys and passwords stored in Jenkins credentials.
+- **Network & Monitoring**:
+  - Creates a custom Docker network.
+  - Runs the application container.
+  - Deploys **Suricata IDS** for monitoring traffic and logs events (`eve.json`).
+- **Dynamic Application Security Testing (DAST)**:
+  - Runs **OWASP ZAP** scans against the running container.
+  - Generates HTML and JSON reports.
+- **Automated Cleanup**:
+  - Stops containers, removes networks, and publishes reports after pipeline execution.
+- **Report Publishing**:
+  - Consolidates all security reports into Jenkins via `publishHTML`.
 
 ---
 
-## ⚙️ Prerequisites
+## 🛠️ Requirements
 
-- Jenkins with the following plugins:
+- Jenkins with Docker installed on agents.
+- Installed tools:
+  - [Trivy](https://aquasecurity.github.io/trivy/)
+  - [Snyk](https://snyk.io/)
+  - [Grype](https://github.com/anchore/grype)
+  - [Cosign](https://github.com/sigstore/cosign)
+- Docker Hub account (for pushing signed images).
+- Jenkins plugins:
   - **Pipeline**
-  - **Snyk Security**
   - **Publish HTML Reports**
-- Installed tools on Jenkins agent:
-  - Docker
-  - Trivy
-  - Grype
-  - Snyk CLI
-  - Cosign
 - Credentials configured in Jenkins:
-  - `SnykToken` → Snyk API token
-  - `Docker` → Docker Hub username/password
-  - `CosignPrivateKey` → Cosign private key
-  - `CosignPassword` → Cosign key password
+  - `Docker` → Username & Password for Docker Hub.
+  - `SnykToken_Text` → Snyk API token.
+  - `CosignPrivateKey` → Cosign private key.
+  - `CosignPassword` → Cosign key password.
 
 ---
 
-## 🚀 Pipeline Stages
+## 📂 Pipeline Stages Overview
 
-| Stage                | Description                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| **Build Docker Image** | Builds the application Docker image.                                       |
-| **Cleanup Docker**     | Removes unused Docker images.                                              |
-| **Trivy Scan**         | Scans image for vulnerabilities and generates reports.                     |
-| **Snyk Security Scan** | Runs Snyk scan for open-source and container vulnerabilities.               |
-| **Grype Scan**         | Scans image for vulnerabilities and outputs JSON/table reports.             |
-| **Push Docker Image**  | Pushes the signed image to Docker Hub.                                     |
-| **Sign Docker Image**  | Signs the image using Cosign with private key.                             |
-| **Create Network**     | Creates a custom Docker network for containers.                            |
-| **Run App Container**  | Runs the application container in the network.                             |
-| **Suricata Monitoring**| Runs Suricata IDS to monitor network traffic.                              |
-| **OWASP ZAP Scan**     | Performs DAST scan against the running app container.                      |
-| **Publish Reports**    | Publishes consolidated security reports in Jenkins.                        |
-
----
-
-## 📂 Reports Generated
-
-- `reports/trivy_report.json`
-- `reports/trivy_report.html`
-- `reports/grype_report.json`
-- `reports/grype_report.txt`
-- `reports/snyk_source_report.html`
-- `reports/snyk_container_report.html`
-- `reports/zap_full_report.html`
-- `reports/zap_full_report.json`
-- `reports/eve.json` (Suricata logs)
+| Stage                  | Description                                                                 |
+|-------------------------|-----------------------------------------------------------------------------|
+| **Build Docker Image**  | Builds the application Docker image.                                        |
+| **Cleanup Docker**      | Removes unused Docker images.                                               |
+| **Trivy Scan**          | Runs Trivy vulnerability scan (JSON + HTML reports).                        |
+| **Snyk Security Scan**  | Runs Snyk dependency & container scans (JSON + HTML reports).                |
+| **Grype Scan**          | Runs Grype vulnerability scan (JSON + TXT reports).                         |
+| **Push Docker Image**   | Pushes the image to Docker Hub.                                             |
+| **Sign Docker Image**   | Signs the image using Cosign.                                               |
+| **Create Network**      | Creates a Docker network for containers.                                    |
+| **Run App Container**   | Runs the application container on port `8123`.                              |
+| **Suricata Monitoring** | Deploys Suricata IDS to monitor traffic and logs events.                    |
+| **OWASP ZAP Scan**      | Runs OWASP ZAP full scan against the running app (HTML + JSON reports).     |
+| **Post Actions**        | Stops containers, removes networks, and publishes reports in Jenkins.       |
 
 ---
 
-## ▶️ Usage
+## 📊 Reports Generated
 
-1. Configure Jenkins with required plugins and credentials.
-2. Place the provided `Jenkinsfile` in your repository root.
-3. Trigger the pipeline from Jenkins.
-4. View consolidated reports in Jenkins under **Security Reports**.
+All reports are stored in the `reports/` directory and published in Jenkins:
+
+- `trivy_report.html` / `trivy_report.json`
+- `snyk_source_report.html` / `snyk_source_report.json`
+- `snyk_container_report.html` / `snyk_container_report.json`
+- `grype_report.txt` / `grype_report.json`
+- `zap_full_report.html` / `zap_full_report.json`
+- `eve.json` (Suricata logs)
 
 ---
 
-## 🔒 Security Notes
+## 🚀 Usage
 
-- Ensure your **Snyk API token** and **Cosign private key** are stored securely in Jenkins credentials.
-- Regularly update Trivy, Grype, Snyk, and Cosign to their latest versions for accurate scanning.
-- Review reports after each build to address vulnerabilities promptly.
+1. Clone this repository into your Jenkins workspace.
+2. Configure required credentials in Jenkins.
+3. Ensure Docker and security tools are installed on the agent.
+4. Run the pipeline from Jenkins.
+5. View consolidated **Security Reports** in Jenkins under the build results.
+
+---
+
+## ⚠️ Notes
+
+- The pipeline is designed to **continue execution even if vulnerabilities are found** (using `|| true` or `exit /b 0`).
+- You can modify the pipeline to **fail builds on critical vulnerabilities** by uncommenting the relevant logic in the Grype stage.
+- Ensure proper permissions for mounted volumes when running OWASP ZAP and Suricata.
 
 ---
 
 ## 📜 License
-
-This pipeline is provided as-is for educational and security automation purposes. Modify and adapt it to fit your project needs.
+This project is for demonstration purposes.  
+Feel free to adapt and extend it for your own CI/CD workflows.
