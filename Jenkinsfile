@@ -59,8 +59,6 @@ pipeline {
         stage("Snyk SAST + Container Scan") {
             steps {
                 script {
-                    bat "if not exist reports mkdir reports"
-
                     withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
 
                         if(isUnix()) {
