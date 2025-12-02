@@ -320,9 +320,9 @@ pipeline {
 		    steps {
 		        script {
 		            if (isUnix()) {
-		                sh 'python3 scripts/combine_reports.py'
+		                sh 'python3 scripts/cvss_generator.py'
 		            } else {
-		                bat 'python scripts\\combine_reports.py'
+		                bat 'python scripts\\cvss_generator.py'
 		            }
 		        }
 		    }
