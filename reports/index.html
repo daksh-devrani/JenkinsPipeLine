@@ -46,6 +46,18 @@
       color: #777;
     }
     .error { color: red; }
+    /* New styles for the severity chart to control size */
+    .chart-container {
+      width: 320px; /* smaller width */
+      height: 220px; /* smaller height */
+      margin: 10px auto;
+    }
+    /* Ensure the canvas fills the container */
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -57,7 +69,9 @@
     <h2>Summary</h2>
     <p><strong>Average CVSS:</strong> <span id="avgScore">Loading...</span></p>
     <p><strong>Max CVSS:</strong> <span id="maxScore">Loading...</span></p>
-    <canvas id="severityChart"></canvas>
+    <div class="chart-container">
+      <canvas id="severityChart" aria-label="Severity distribution chart" role="img"></canvas>
+    </div>
   </section>
 
   <section id="details">
@@ -180,7 +194,11 @@
     }
 
     function renderChart(vulns) {
-      const ctx = document.getElementById("severityChart").getContext("2d");
+      const canvas = document.getElementById("severityChart");
+      // explicitly set the canvas pixel size to match the container for crisp rendering
+      canvas.width = canvas.clientWidth * window.devicePixelRatio;
+      canvas.height = canvas.clientHeight * window.devicePixelRatio;
+      const ctx = canvas.getContext("2d");
       const counts = { High:0, Medium:0, Low:0, Critical:0 };
       vulns.forEach(v => {
         if (v.severity) {
@@ -196,6 +214,16 @@
             data: Object.values(counts),
             backgroundColor: ["red","orange","yellow","purple"]
           }]
+        },
+        options: {
+          responsive: false, // use fixed canvas size from CSS/container
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 12 }
+            }
+          }
         }
       });
     }
