@@ -1,44 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Security Dashboard</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Scan Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-  <header>
-    <h1>Security Vulnerability Dashboard</h1>
-  </header>
-
-  <section id="summary">
-    <h2>Summary</h2>
-    <p><strong>Average CVSS:</strong> <span id="avgScore">Loading...</span></p>
-    <p><strong>Max CVSS:</strong> <span id="maxScore">Loading...</span></p>
-    <canvas id="severityChart"></canvas>
-  </section>
-
-  <section id="details">
-    <h2>Vulnerability Details</h2>
-    <table id="vulnTable">
-      <thead>
-        <tr>
-          <th>CVE</th>
-          <th>Package</th>
-          <th>Version</th>
-          <th>CVSS</th>
-          <th>Severity</th>
-          <th>Fix</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </section>
-
-  <footer>
-    <p>Generated from Grype, Snyk, Trivy, ZAP, Suricata reports</p>
-  </footer>
-
-  <script src="script.js"></script>
+    <header>
+        <h1><i class="fas fa-shield-alt"></i> Security Scan Dashboard</h1>
+        <p>Visualizing reports from Suricata, Grype, Snyk, Trivy, and OWASP ZAP</p>
+    </header>
+    <main>
+        <div class="dashboard">
+            <div class="card" id="suricata">
+                <h2><i class="fas fa-network-wired"></i> Suricata Alerts</h2>
+                <div class="content" id="suricata-content">Loading...</div>
+            </div>
+            <div class="card" id="grype">
+                <h2><i class="fas fa-bug"></i> Grype Vulnerabilities</h2>
+                <div class="content" id="grype-content">Loading...</div>
+            </div>
+            <div class="card" id="snyk-container">
+                <h2><i class="fas fa-docker"></i> Snyk Container Issues</h2>
+                <div class="content" id="snyk-container-content">Loading...</div>
+            </div>
+            <div class="card" id="snyk-source">
+                <h2><i class="fas fa-code"></i> Snyk Source Issues</h2>
+                <div class="content" id="snyk-source-content">Loading...</div>
+            </div>
+            <div class="card" id="trivy">
+                <h2><i class="fas fa-search"></i> Trivy Vulnerabilities</h2>
+                <div class="content" id="trivy-content">Loading...</div>
+            </div>
+            <div class="card" id="zap">
+                <h2><i class="fas fa-spider"></i> OWASP ZAP Alerts</h2>
+                <div class="content" id="zap-content">Loading...</div>
+            </div>
+        </div>
+    </main>
+    <script src="script.js"></script>
 </body>
 </html>

@@ -258,7 +258,7 @@ pipeline {
 		    steps {
 		        script {
 		            if (isUnix()) {
-		                sh 'chmod -R 777 reports'
+		                // sh 'chmod -R 777 reports'
 		
 		                sh '''
 		                    docker run --rm \
