@@ -316,17 +316,19 @@ pipeline {
 		    }
 		}
 		
-		stage("Combine Reports") {
-		    steps {
-		        script {
-		            if (isUnix()) {
-		                sh 'python3 scripts/cvss_generator.py'
-		            } else {
-		                bat 'python scripts\\cvss_generator.py'
-		            }
-		        }
-		    }
-		}
+        stage("Combine Reports") {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh 'python3 scripts/combine_reports.py'
+                        sh 'python3 scripts/combined_to_html.py'
+                    } else {
+                        bat 'python scripts\\combine_reports.py'
+                        bat 'python scripts\\combined_to_html.py'
+                    }
+                }
+            }
+        }
     }
 	
     post {
@@ -342,7 +344,7 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'reports',
-                reportFiles: 'index.html, trivy_report.html, snyk_source_report.html, snyk_container_report.html, zap_full_report.html, grype_report.txt,eve_report.html',
+                reportFiles: 'index.html, trivy_report.html, snyk_source_report.html, snyk_container_report.html, zap_full_report.html, grype_report.txt, eve_report.html, combined_report.html',
                 reportName: 'Security Reports'
             ])
         }
