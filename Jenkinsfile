@@ -315,8 +315,20 @@ pipeline {
 		        }
 		    }
 		}
+		
+		stage("Combine Reports") {
+		    steps {
+		        script {
+		            if (isUnix()) {
+		                sh 'python3 scripts/combine_reports.py'
+		            } else {
+		                bat 'python scripts\\combine_reports.py'
+		            }
+		        }
+		    }
+		}
     }
-
+	
     post {
         always {
             script {
