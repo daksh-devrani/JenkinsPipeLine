@@ -64,6 +64,7 @@ pipeline {
                             // Authenticate once
                             sh 'snyk auth $SNYK_TOKEN'
 
+                            sh 'npm install'
                             // Source (dependency) scan
                             sh 'snyk test --json > reports/snyk_source_report.json || true'
                             sh 'snyk test --json | snyk-to-html -o reports/snyk_source_report.html || true'
