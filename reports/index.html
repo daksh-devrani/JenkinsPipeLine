@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Security Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Security Vulnerability Dashboard</h1>
+  </header>
+
+  <section id="summary">
+    <h2>Summary</h2>
+    <p><strong>Average CVSS:</strong> <span id="avgScore">Loading...</span></p>
+    <p><strong>Max CVSS:</strong> <span id="maxScore">Loading...</span></p>
+    <canvas id="severityChart"></canvas>
+  </section>
+
+  <section id="details">
+    <h2>Vulnerability Details</h2>
+    <table id="vulnTable">
+      <thead>
+        <tr>
+          <th>CVE</th>
+          <th>Package</th>
+          <th>Version</th>
+          <th>CVSS</th>
+          <th>Severity</th>
+          <th>Fix</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>Generated from Grype, Snyk, Trivy, ZAP, Suricata reports</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
