@@ -2,9 +2,51 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Security Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Security Vulnerability Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f6f9;
+      color: #333;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    table th {
+      background: #2c3e50;
+      color: #fff;
+    }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 0.9em;
+      color: #777;
+    }
+    .error { color: red; }
+  </style>
 </head>
 <body>
   <header>
@@ -39,6 +81,133 @@
     <p>Generated from Grype, Snyk, Trivy, ZAP, Suricata reports</p>
   </footer>
 
-  <script src="script.js"></script>
+  <script>
+    async function loadReports() {
+      const files = [
+        "grype_report.json",
+        "snyk_container_report.json",
+        "trivy_report.json",
+        "zap_full_report.json",
+        "eve.json"
+      ];
+      let allVulns = [];
+      for (let file of files) {
+        try {
+          const res = await fetch(file);
+          const data = await res.json();
+          if (data.matches) {
+            data.matches.forEach(m => {
+              if (m.vulnerability && m.vulnerability.cvss) {
+                allVulns.push({
+                  cve: m.vulnerability.id,
+                  pkg: m.artifact.name,
+                  version: m.artifact.version,
+                  cvss: m.vulnerability.cvss[0]?.metrics?.baseScore || null,
+                  severity: m.vulnerability.severity,
+                  fix: m.vulnerability.fix?.versions?.[0] || "None"
+                });
+              }
+            });
+          } else if (data.vulnerabilities) {
+            data.vulnerabilities.forEach(v => {
+              allVulns.push({
+                cve: v.identifiers?.CVE?.[0] || v.title,
+                pkg: v.packageName,
+                version: v.version,
+                cvss: v.cvssScore || null,
+                severity: v.severity,
+                fix: v.nearestFixedInVersion || "None"
+              });
+            });
+          } else if (data.Results) {
+            data.Results.forEach(r => {
+              if (r.Vulnerabilities) {
+                r.Vulnerabilities.forEach(v => {
+                  allVulns.push({
+                    cve: v.VulnerabilityID,
+                    pkg: v.PkgName,
+                    version: v.InstalledVersion,
+                    cvss: v.CVSS?.nvd?.V3Score || null,
+                    severity: v.Severity,
+                    fix: v.FixedVersion || "None"
+                  });
+                });
+              }
+            });
+          } else if (data.site) {
+            data.site.forEach(s => {
+              s.alerts.forEach(a => {
+                allVulns.push({
+                  cve: a.alert,
+                  pkg: "WebApp",
+                  version: "-",
+                  cvss: null,
+                  severity: a.riskdesc,
+                  fix: a.solution
+                });
+              });
+            });
+          }
+        } catch (err) {
+          console.error("Error loading", file, err);
+        }
+      }
+      return allVulns;
+    }
+
+    function calculateScores(vulns) {
+      const scores = vulns.map(v => v.cvss).filter(s => s !== null);
+      if (scores.length === 0) return { avg: "N/A", max: "N/A" };
+      const avg = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(2);
+      const max = Math.max(...scores).toFixed(2);
+      return { avg, max };
+    }
+
+    function renderTable(vulns) {
+      const tbody = document.querySelector("#vulnTable tbody");
+      tbody.innerHTML = "";
+      vulns.forEach(v => {
+        const row = `<tr>
+          <td>${v.cve}</td>
+          <td>${v.pkg}</td>
+          <td>${v.version}</td>
+          <td>${v.cvss || "-"}</td>
+          <td>${v.severity}</td>
+          <td>${v.fix}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    function renderChart(vulns) {
+      const ctx = document.getElementById("severityChart").getContext("2d");
+      const counts = { High:0, Medium:0, Low:0, Critical:0 };
+      vulns.forEach(v => {
+        if (v.severity) {
+          if (counts[v.severity] !== undefined) counts[v.severity]++;
+          else counts[v.severity] = (counts[v.severity]||0)+1;
+        }
+      });
+      new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: Object.keys(counts),
+          datasets: [{
+            data: Object.values(counts),
+            backgroundColor: ["red","orange","yellow","purple"]
+          }]
+        }
+      });
+    }
+
+    (async function(){
+      const vulns = await loadReports();
+      const { avg, max } = calculateScores(vulns);
+      document.getElementById("avgScore").textContent = avg;
+      document.getElementById("maxScore").textContent = max;
+      renderTable(vulns);
+      renderChart(vulns);
+    })();
+  </script>
 </body>
 </html>
