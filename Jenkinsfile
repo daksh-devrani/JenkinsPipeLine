@@ -42,15 +42,15 @@ pipeline {
                     if (isUnix()) {
                         sh 'rm -rf reports'
                         sh 'mkdir -p reports'
-                        runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
+                        // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports/html.tpl'
                         sh 'trivy image --format json -o reports/trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
-                        sh 'trivy image --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
+                        // sh 'trivy image --format template --template "@reports/html.tpl" -o reports/trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || true'
                     } else {
                         bat 'rmdir /S /Q reports || echo No reports dir'
                         bat 'mkdir reports'
-                        runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
+                        // runCmd 'curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o reports\\html.tpl'
                         bat 'trivy image --format json -o reports\\trivy_report.json --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
-                        bat 'trivy image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
+                        // bat 'trivy image --format template --template "@reports\\html.tpl" -o reports\\trivy_report.html --severity MEDIUM,HIGH,CRITICAL sreyassharma/signed_images_jenkins:1.0.1 || exit /b 0'
                     }
                 }
             }
@@ -67,22 +67,22 @@ pipeline {
                             sh 'npm install'
                             // Source (dependency) scan
                             sh 'snyk test --json > reports/snyk_source_report.json || true'
-                            sh 'snyk test --json | snyk-to-html -o reports/snyk_source_report.html || true'
+                            // sh 'snyk test --json | snyk-to-html -o reports/snyk_source_report.html || true'
 
                             // Container image scan
                             sh 'snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports/snyk_container_report.json || true'
-                            sh 'snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json | snyk-to-html -o reports/snyk_container_report.html || true'
+                            // sh 'snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json | snyk-to-html -o reports/snyk_container_report.html || true'
 
                         } else {
                             bat "snyk auth %SNYK_TOKEN%"
 
                             // Source (dependency) scan
                             bat "snyk test --json > reports\\snyk_source_report.json || exit /b 0"
-                            bat "snyk test --json | snyk-to-html -o reports\\snyk_source_report.html || exit /b 0"
+                            // bat "snyk test --json | snyk-to-html -o reports\\snyk_source_report.html || exit /b 0"
 
                             // Container image scan
                             bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json > reports\\snyk_container_report.json || exit /b 0"
-                            bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json | snyk-to-html -o reports\\snyk_container_report.html || exit /b 0"
+                            // bat "snyk container test sreyassharma/signed_images_jenkins:1.0.1 --json | snyk-to-html -o reports\\snyk_container_report.html || exit /b 0"
                         }
                     }
                 }
@@ -96,13 +96,14 @@ pipeline {
                     if(isUnix()) {
                         sh '''
                         grype sreyassharma/signed_images_jenkins:1.0.1 -o json > reports/grype_report.json || exit 0
-                        grype sreyassharma/signed_images_jenkins:1.0.1 -o table > reports/grype_report.txt || exit 0
                         '''
+
+                        // grype sreyassharma/signed_images_jenkins:1.0.1 -o table > reports/grype_report.txt || exit 0
                     }
 
                     else{
                         bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o json > reports\\grype_report.json || exit 0"
-                        bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o table > reports\\grype_report.txt || exit 0"
+                        // bat "\"${GRYPE_PATH}\\grype.exe\" sreyassharma/signed_images_jenkins:1.0.1 -o table > reports\\grype_report.txt || exit 0"
 
                         // def foundHigh = bat(returnStatus: true, script: 'findstr /I "CRITICAL HIGH" reports\\grype_report.json')
                         // if (foundHigh == 0) {
@@ -240,17 +241,17 @@ pipeline {
             }
         }
 
-        stage("Convert Suricata Report") {
-            steps {
-                script {
-                    if (isUnix()) {
-                        sh 'python3 scripts/eve_to_html.py'
-                    } else {
-                        bat 'python scripts\\eve_to_html.py'
-                    }
-                }
-            }
-        }
+        // stage("Convert Suricata Report") {
+        //     steps {
+        //         script {
+        //             if (isUnix()) {
+        //                 sh 'python3 scripts/eve_to_html.py'
+        //             } else {
+        //                 bat 'python scripts\\eve_to_html.py'
+        //             }
+        //         }
+        //     }
+        // }
 
 
         stage("OWASP ZAP Scan") {
@@ -329,7 +330,7 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'reports',
-                reportFiles: 'trivy_report.html, snyk_source_report.html, snyk_container_report.html, zap_full_report.html, grype_report.txt,eve_report.html',
+                reportFiles: 'index.html, trivy_report.html, snyk_source_report.html, snyk_container_report.html, zap_full_report.html, grype_report.txt,eve_report.html',
                 reportName: 'Security Reports'
             ])
         }
