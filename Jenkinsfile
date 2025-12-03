@@ -76,6 +76,7 @@ pipeline {
                         } else {
                             bat "snyk auth %SNYK_TOKEN%"
 
+                            bat 'npm install'
                             // Source (dependency) scan
                             bat "snyk test --json > reports\\snyk_source_report.json || exit /b 0"
                             bat "snyk test --json | snyk-to-html -o reports\\snyk_source_report.html || exit /b 0"
