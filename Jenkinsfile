@@ -348,10 +348,6 @@ pipeline {
 	            reportFiles: 'index.html, trivy_report.html, snyk_source_report.html, snyk_container_report.html, zap_full_report.html, grype_report.txt, eve_report.html, combined_report.html',
 	            reportName: 'Security Reports'
 	        ])
-	
-	        archiveArtifacts artifacts: 'reports/**/*.html, reports/**/*.json, reports/**/*.txt',
-	                         allowEmptyArchive: true,
-	                         fingerprint: true
 	    }
 	}
 }
