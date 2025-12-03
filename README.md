@@ -106,5 +106,5 @@ After pipeline execution, Jenkins will display a **Security Reports** tab with:
 ---
 
 ## 📜 License
-
-This project is licensed under the MIT License.
+This project is for demonstration purposes.  
+Feel free to adapt and extend it for your own CI/CD workflows.
